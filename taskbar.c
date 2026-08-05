@@ -66,14 +66,17 @@
 
 #define PSCTRL_GETINT		1L
 
+#define PS_CFG_CPU_MODEL	2L
+#define PS_CFG_FPU_MODEL	3L
 #define PS_STAT_CACHE_USED	39L
 #define PS_STAT_CACHE_TOTAL	40L
 #define PS_HOST_SOC_TEMP_MC	64L
-#define PS_HOST_LOADAVG_X100 66L
 #define PS_HOST_TIME_DOS	68L
 #define PS_HOST_DATE_DOS	69L
 
-#define TB_NCELLS			4		/* name/cpu, cache, temp, load */
+#define DEGREE_CH			'\370'		/* 0xF8: degree sign in the Atari charset */
+
+#define TB_NCELLS			4		/* badge, cpu/fpu, jit cache, temp */
 #define TB_CTEXT			28		/* max cell text length */
 #define TB_VPAD				3		/* pixels above/below cell */
 #define TB_HPAD				6		/* pixels left/right of cell text */
@@ -93,6 +96,7 @@ static struct nf_ops *tb_nf = NULL;	/* NatFeats call table */
 
 static char tb_cell[TB_NCELLS][TB_CTEXT];	/* left-hand cell texts */
 static char tb_clock[8];					/* right-hand clock text */
+static char tb_cpustr[16];					/* "68040/FPU" etc., built once */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
 static _WORD tb_cw;							/* actual text cell metrics in use */
 static _WORD tb_ch;
@@ -389,37 +393,29 @@ static bool tb_build(void)
 		long temp = tb_ps(PS_HOST_SOC_TEMP_MC);
 		long used = tb_ps(PS_STAT_CACHE_USED);
 		long total = tb_ps(PS_STAT_CACHE_TOTAL);
-		long load = tb_ps(PS_HOST_LOADAVG_X100);
 
 		strcpy(new_cell[0], "PiSTorm");
 
+		if (tb_cpustr[0] != 0)
+			strcpy(new_cell[1], tb_cpustr);
+
 		if (total > 0)
 		{
-			strcpy(new_cell[1], "JIT ");
-			ltoa((used * 100L) / total, &new_cell[1][4], 10);
-			strcat(new_cell[1], "%");
+			strcpy(new_cell[2], "JIT ");
+			ltoa((used * 100L) / total, &new_cell[2][4], 10);
+			strcat(new_cell[2], "%");
 		}
 
 		if (temp > 0)
 		{
-			p = new_cell[2];
-			strcpy(p, "CPU ");
-			ltoa(temp / 1000L, p + 4, 10);
+			p = new_cell[3];
+			strcpy(p, "Temp ");
+			ltoa(temp / 1000L, p + 5, 10);
 			p += strlen(p);
 			*p++ = '.';
 			*p++ = (char) ('0' + (temp % 1000L) / 100L);
+			*p++ = DEGREE_CH;
 			*p++ = 'C';
-			*p = 0;
-		}
-
-		if (load >= 0)
-		{
-			p = new_cell[3];
-			strcpy(p, "load ");
-			ltoa(load / 100L, p + 5, 10);
-			p += strlen(p);
-			*p++ = '.';
-			p = tb_two(p, (_WORD) (load % 100L));
 			*p = 0;
 		}
 	}
@@ -495,6 +491,29 @@ static void tb_open(void)
 		tb_psid = nf_get_id("PSCTRL");
 
 	tb_timesync();						/* set the system clock from the Pi */
+
+	/* The CPU/FPU cell text - configuration values, so built once */
+
+	if (tb_psid != 0)
+	{
+		long cpu = tb_ps(PS_CFG_CPU_MODEL);
+		long fpu = tb_ps(PS_CFG_FPU_MODEL);
+
+		if (cpu > 0)
+		{
+			ltoa(cpu, tb_cpustr, 10);
+
+			if (fpu > 0)
+			{
+				strcat(tb_cpustr, "/");
+
+				if (fpu == cpu)
+					strcat(tb_cpustr, "FPU");	/* on-chip FPU (040/060) */
+				else
+					ltoa(fpu, tb_cpustr + strlen(tb_cpustr), 10);
+			}
+		}
+	}
 
 	size = tb_rect;
 
