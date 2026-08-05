@@ -61,6 +61,7 @@ _WORD xd_posmode = XD_CENTERED;			/* Position mode */
 _WORD xd_vhandle;						/* Vdi handle for library functions */
 _WORD xd_nplanes;						/* Number of planes the current resolution */
 _WORD xd_ncolours;						/* Number of colours in the current resolution */
+_WORD xd_truecol;						/* Nonzero: hicolour/truecolour mode (> 8 planes) */
 _WORD xd_fnt_w;							/* screen font width */
 _WORD xd_fnt_h;							/* screen font height */
 _WORD xd_pix_height;					/* pixel size */
@@ -2344,11 +2345,26 @@ _WORD init_xdialog(_WORD *vdi_handle, void *(*malloc_func) (unsigned long size),
 	xd_pix_height = work_out[4];
 	xd_ncolours = work_out[13];
 
-	if (xd_ncolours >= 16)
-		xd_colaes = 1;
-
 	vq_extnd(xd_vhandle, 1, work_out);
 	xd_nplanes = work_out[4];
+
+	/*
+	 * Sanity for hicolour/truecolour modes (e.g. fVDI on PiStorm or
+	 * ARAnyM, NVDI on graphics cards): in such modes work_out[13] may
+	 * legitimately be 0 (meaning "more than 32767 colours"), 32767, or
+	 * junk after overflowing the signed 16-bit word. As xd_ncolours is
+	 * used as a loop bound and array size throughout, clamp it to the
+	 * size of the pen table which colour-index drawing actually uses.
+	 * xd_truecol remembers that the display is truecolour so that
+	 * palette save/restore can be skipped entirely.
+	 */
+	xd_truecol = (xd_nplanes > 8) ? 1 : 0;
+
+	if (xd_ncolours <= 0 || (xd_truecol && xd_ncolours > 256))
+		xd_ncolours = 256;
+
+	if (xd_ncolours >= 16)
+		xd_colaes = 1;
 
 	vsf_perimeter(xd_vhandle, 0);	/* no borders in v_bar() */
 

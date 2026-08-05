@@ -195,9 +195,13 @@ static _WORD exec_com(const char *name, COMMAND *cml, char *envp, _WORD appl_typ
 	_WORD stdout_handle = 0;
 	_WORD ostderr_handle = 0;
 
-	/* If 'save colour' option is set, save the current colours. */
+	/*
+	 * If 'save colour' option is set, save the current colours.
+	 * In truecolour modes there is no palette to preserve around a
+	 * program run, so skip the save (and, via NULL, the restore).
+	 */
 
-	if ((options.vprefs & SAVE_COLOURS) && ((colours = get_colours()) == NULL))
+	if (!xd_truecol && (options.vprefs & SAVE_COLOURS) && ((colours = get_colours()) == NULL))
 		return ENOMEM;
 
 	/* 

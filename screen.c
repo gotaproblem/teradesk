@@ -349,6 +349,16 @@ static CfgEntry const palette_root[] = {
 
 void handle_colours(_WORD io)
 {
+	/*
+	 * In hicolour/truecolour modes there is no screen palette worth
+	 * saving or restoring: what is on screen is not defined by the
+	 * vq_color/vs_color pen table, and looping over it would only
+	 * produce a meaningless "teradesk.pal" and a spurious palette-size
+	 * warning on the next load.
+	 */
+	if (xd_truecol)
+		return;
+
 	if (options.vprefs & SAVE_COLOURS)	/* separate file "teradesk.pal" */
 		handle_cfgfile(palname, palette_root, palide, io);
 }

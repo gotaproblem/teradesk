@@ -563,14 +563,28 @@ short voptions(void)
 
 			npmin = 1;
 			npmax = 16;
-			ap = empty;
-			ncc = 0x00000001L << np;
 			npp = np;
 
-			if (ncc > 1024)
+			if (np > 16)
 			{
-				ncc /= 1024;
-				ap = "K";
+				/*
+				 * Truecolour (e.g. 32-bit fVDI on PiStorm): 2^24
+				 * displayable colours regardless of pixel packing.
+				 * Note: without this branch "1L << np" would be
+				 * undefined behaviour for np >= 32.
+				 */
+				ncc = 16;
+				ap = "M";
+			} else
+			{
+				ap = empty;
+				ncc = 0x00000001L << np;
+
+				if (ncc > 1024)
+				{
+					ncc /= 1024;
+					ap = "K";
+				}
 			}
 
 			ltoa(ncc, s, 10);
@@ -589,7 +603,15 @@ short voptions(void)
 			if (fal_mil)
 			{
 				newmode &= ~(VM_STMODE | VM_80COL | VM_NPLANES);
-				newmode |= npc[np];
+
+				/*
+				 * npc[] maps plane count to the 3-bit Falcon VM_NPLANES
+				 * field and has entries for 1..16 planes only; guard
+				 * against out-of-bounds reads in truecolour modes
+				 * (e.g. a Milan with a graphics card at > 16 planes).
+				 */
+				if (np <= 16)
+					newmode |= npc[np];
 
 				if (newrez <= ST_HIGHRES)
 					newmode |= VM_STMODE;
