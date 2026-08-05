@@ -49,6 +49,7 @@
 #include "filetype.h"					/* must be before applik.h */
 #include "applik.h"
 #include "rsc_load.h"
+#include "bkgimg.h"
 
 
 typedef enum
@@ -2469,6 +2470,11 @@ void set_dsk_background(_WORD pattern, _WORD colour)
 {
 	options.dsk_pattern = pattern;
 	options.dsk_colour = colour;
+
+	/* Bespoke Desktop: an active wallpaper overrides pattern/colour */
+
+	if (bk_install())
+		return;
 
 	if (desktop[0].ob_type == G_BOX)
 	{

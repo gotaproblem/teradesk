@@ -53,6 +53,7 @@ SRCS = \
 	va.c va.h \
 	taskbar.c taskbar.h \
 	psmenu.c psmenu.h \
+	bkgimg.c bkgimg.h \
 	dragdrop.c dragdrop.h \
 	\
 	environm.c environm.h \

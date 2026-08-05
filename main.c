@@ -52,6 +52,7 @@
 #include "startprg.h"
 #include "taskbar.h"
 #include "psmenu.h"
+#include "bkgimg.h"
 #include "main.h"
 
 #undef os_start
@@ -183,6 +184,8 @@ static CfgEntry const Options_table[] = {
 	/* Bespoke Desktop */
 	CFG_D("tbar", options.tbar),	/* taskbar on/off */
 	CFG_S("psdr", options.psdir),	/* PiSTorm apps directory */
+	CFG_S("wall", options.wallp),	/* wallpaper image (PNG/JPG) */
+	CFG_D("walm", options.wallm),	/* wallpaper mode: 0 stretch, 1 fit */
 
 	CFG_ENDG(),
 	CFG_LAST()
@@ -858,6 +861,7 @@ static void opt_default(void)
 #endif
 	options.aarr = 1;
 	options.tbar = 1;					/* Bespoke Desktop: taskbar on */
+	options.wallm = 1;					/* Bespoke Desktop: wallpaper fits */
 
 	/*
 	 * There is no need to set options.sort, .mode, .sexit, .dsk_pattern,
@@ -944,6 +948,7 @@ static void opt_config(XFILE *file, int lvl, int io, int *error)
 				options.dsk_pattern = limpattern(options.dsk_pattern);
 				options.win_pattern = limpattern(options.win_pattern);
 				options.tbar = (options.tbar != 0) ? 1 : 0;	/* taskbar on/off */
+				options.wallm = (options.wallm != 0) ? 1 : 0;	/* wallpaper mode */
 #if 0									/* currently not used */
 				options.vrez &= 0x0007;
 #endif
@@ -1223,6 +1228,10 @@ static bool init(void)
 		/* Add the PiSTorm menu (needs options.psdir from the config) */
 
 		ps_menu_init();
+
+		/* Load the wallpaper, if one is configured (PSIMG NatFeat) */
+
+		bk_init();
 
 #if _MINT_
 		/* 
