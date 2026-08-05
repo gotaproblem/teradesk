@@ -51,6 +51,7 @@
 #include "video.h"
 #include "startprg.h"
 #include "taskbar.h"
+#include "psmenu.h"
 #include "main.h"
 
 #undef os_start
@@ -181,6 +182,7 @@ static CfgEntry const Options_table[] = {
 	CFG_D("wcol", options.win_colour),	/* window colour  */
 	/* Bespoke Desktop */
 	CFG_D("tbar", options.tbar),	/* taskbar on/off */
+	CFG_S("psdr", options.psdir),	/* PiSTorm apps directory */
 
 	CFG_ENDG(),
 	CFG_LAST()
@@ -1218,6 +1220,10 @@ static bool init(void)
 
 		tb_apply();
 
+		/* Add the PiSTorm menu (needs options.psdir from the config) */
+
+		ps_menu_init();
+
 #if _MINT_
 		/* 
 		 * Start applications which have been defined as autostart.
@@ -1322,6 +1328,14 @@ static void hndlmenu(_WORD title,		/* index of menu title */
 #if _LOGFILE
 	fprintf(logfile, "\n hndlmenu %i %i %i", title, item, kstate);
 #endif
+
+	/* Selections from the runtime-built PiSTorm menu are handled apart */
+
+	if (ps_menu_select(title, item, kstate))
+	{
+		menu_tnormal(menu, title, 1);
+		return;
+	}
 
 	if ((menu[item].ob_state & OS_DISABLED) == 0)
 	{

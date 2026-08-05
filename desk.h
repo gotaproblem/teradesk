@@ -178,6 +178,7 @@ typedef struct
 	/* Bespoke Desktop */
 
 	_WORD tbar;					/* taskbar on/off */
+	VLNAME psdir;				/* directory scanned for the PiSTorm menu */
 } Options;
 
 
