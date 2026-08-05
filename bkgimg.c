@@ -28,6 +28,10 @@
 #include "resource.h"
 #include "desk.h"
 #include "error.h"
+#include "lists.h"						/* LSTYPE, needed by slider.h */
+#include "slider.h"						/* SLIDER, needed by icon.h */
+#include "xfilesys.h"					/* XFILE, needed by icon.h */
+#include "config.h"
 #include "icon.h"
 #include "bkgimg.h"
 

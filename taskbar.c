@@ -29,6 +29,10 @@
 #include "desk.h"
 #include "error.h"
 #include "events.h"
+#include "lists.h"						/* LSTYPE, needed by slider.h */
+#include "slider.h"						/* SLIDER, needed by icon.h */
+#include "xfilesys.h"					/* XFILE, needed by window.h/icon.h */
+#include "config.h"
 #include "font.h"
 #include "screen.h"
 #include "main.h"
@@ -123,7 +127,7 @@ static void tb_line(_WORD x1, _WORD y1, _WORD x2, _WORD y2, _WORD colour)
  * Text is drawn in the default (window text) font.
  */
 
-static void tb_drawcell(_WORD *x, const char *text)
+static void tb_drawcell(_WORD *x, char *text)
 {
 	_WORD dark = (xd_ncolours >= 16) ? G_LBLACK : G_BLACK;
 	_WORD w = (_WORD) strlen(text) * def_font.cw + 2 * TB_HPAD;
@@ -148,7 +152,7 @@ static void tb_drawcell(_WORD *x, const char *text)
 
 	/* the text; set_txt_default() aligns to top of the character cell */
 
-	w_transptext(*x + TB_HPAD, in.g_y + (in.g_h - def_font.ch) / 2, (char *) NO_CONST(text));
+	w_transptext(*x + TB_HPAD, in.g_y + (in.g_h - def_font.ch) / 2, text);
 
 	*x += w + TB_GAP;
 }
