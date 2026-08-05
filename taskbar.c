@@ -25,6 +25,8 @@
 #include <library.h>
 #include <xdialog.h>
 
+#include <time.h>
+
 #include "resource.h"
 #include "desk.h"
 #include "error.h"
@@ -92,6 +94,8 @@ static struct nf_ops *tb_nf = NULL;	/* NatFeats call table */
 static char tb_cell[TB_NCELLS][TB_CTEXT];	/* left-hand cell texts */
 static char tb_clock[8];					/* right-hand clock text */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
+static _WORD tb_cw;							/* actual text cell metrics in use */
+static _WORD tb_ch;
 
 
 /*
@@ -130,7 +134,7 @@ static void tb_line(_WORD x1, _WORD y1, _WORD x2, _WORD y2, _WORD colour)
 static void tb_drawcell(_WORD *x, char *text)
 {
 	_WORD dark = (xd_ncolours >= 16) ? G_LBLACK : G_BLACK;
-	_WORD w = (_WORD) strlen(text) * def_font.cw + 2 * TB_HPAD;
+	_WORD w = (_WORD) strlen(text) * tb_cw + 2 * TB_HPAD;
 	_WORD y1 = tb_rect.g_y + TB_VPAD;
 	_WORD y2 = tb_rect.g_y + tb_rect.g_h - TB_VPAD - 1;
 	GRECT in;
@@ -150,11 +154,35 @@ static void tb_drawcell(_WORD *x, char *text)
 	tb_line(*x, y2, *x + w - 1, y2, G_WHITE);
 	tb_line(*x + w - 1, y1 + 1, *x + w - 1, y2, G_WHITE);
 
-	/* the text; set_txt_default() aligns to top of the character cell */
+	/* the text; the font is set to top-of-cell alignment */
 
-	w_transptext(*x + TB_HPAD, in.g_y + (in.g_h - def_font.ch) / 2, text);
+	w_transptext(*x + TB_HPAD, in.g_y + (in.g_h - tb_ch) / 2, text);
 
 	*x += w + TB_GAP;
+}
+
+
+/*
+ * Select the bar text font: the default (system) font scaled up so the
+ * character cell fills the bar interior. vst_height() returns the
+ * metrics actually granted, which the layout then uses - so a VDI
+ * without a suitably large font stays consistent, just smaller.
+ */
+
+static void tb_setfont(void)
+{
+	_WORD chw, chh, celw, celh;
+	_WORD want = tb_rect.g_h - 2 * TB_VPAD - 8;
+
+	set_txt_default(&def_font);
+
+	if (want < def_font.ch)
+		want = def_font.ch;
+
+	vst_height(vdi_handle, want, &chw, &chh, &celw, &celh);
+
+	tb_cw = celw;
+	tb_ch = celh;
 }
 
 
@@ -171,7 +199,7 @@ static void tb_drawpart(GRECT *clip)
 	GRECT in;
 
 	xd_clip_on(clip);
-	set_txt_default(&def_font);
+	tb_setfont();
 
 	/* bar background with a raised top edge and a dark bottom edge */
 
@@ -197,7 +225,7 @@ static void tb_drawpart(GRECT *clip)
 	if (tb_clock[0] != 0)
 	{
 		x = tb_rect.g_x + tb_rect.g_w - TB_GAP -
-			((_WORD) strlen(tb_clock) * def_font.cw + 2 * TB_HPAD);
+			((_WORD) strlen(tb_clock) * tb_cw + 2 * TB_HPAD);
 		tb_drawcell(&x, tb_clock);
 	}
 
@@ -295,16 +323,27 @@ static bool tb_build(void)
 {
 	char new_cell[TB_NCELLS][TB_CTEXT];
 	char new_clock[8];
-	unsigned int t;
+	time_t now;
+	struct tm *lt;
 	bool changed = FALSE;
 	_WORD i;
 
 	memclr(new_cell, sizeof(new_cell));
 
-	/* the clock, from GEMDOS time (HHHHHmmm mmmsssss) */
+	/*
+	 * The clock. Use the C library rather than raw Tgettime(): under
+	 * FreeMiNT the kernel keeps UTC and the timezone lives in the
+	 * library (TZ), so localtime() shows the correct local time there
+	 * as well as on plain TOS.
+	 */
 
-	t = (unsigned int) Tgettime();
-	sprintf(new_clock, "%02u:%02u", (t >> 11) & 0x1F, (t >> 5) & 0x3F);
+	now = time(NULL);
+	lt = localtime(&now);
+
+	if (lt != NULL)
+		sprintf(new_clock, "%02d:%02d", lt->tm_hour, lt->tm_min);
+	else
+		new_clock[0] = 0;
 
 	/* PiSTorm cells, only when PSCTRL answered the probe */
 
@@ -356,7 +395,7 @@ static bool tb_build(void)
 
 void tb_reserve(void)
 {
-	tb_height = def_font.ch + 2 * TB_VPAD + 4;
+	tb_height = 2 * def_font.ch + 2 * TB_VPAD + 4;
 
 	tb_rect.g_x = xd_desk.g_x;
 	tb_rect.g_y = xd_desk.g_y + xd_desk.g_h - tb_height;
@@ -409,6 +448,25 @@ void tb_apply(void)
 {
 	if (options.tbar != 0)
 	{
+		/*
+		 * Optional configured height ('tbrh' in teradesk.inf; 0 = the
+		 * default of twice the system font height). Adjust the already
+		 * reserved strip and the desktop tree root before opening.
+		 */
+
+		if (options.tbarh != 0 && options.tbarh != tb_height && desktop != NULL)
+		{
+			_WORD d = options.tbarh - tb_height;
+
+			xd_desk.g_h -= d;
+			tb_height = options.tbarh;
+			tb_rect.g_y -= d;
+			tb_rect.g_h = tb_height;
+
+			desktop[0].ob_height = xd_desk.g_h;
+			regen_desktop(desktop);
+		}
+
 		tb_open();
 	} else if (tb_height != 0)
 	{

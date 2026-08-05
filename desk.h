@@ -178,6 +178,7 @@ typedef struct
 	/* Bespoke Desktop */
 
 	_WORD tbar;					/* taskbar on/off */
+	_WORD tbarh;				/* taskbar height in pixels, 0 = auto */
 	_WORD wallm;				/* wallpaper mode: 0 stretch, 1 fit */
 	VLNAME psdir;				/* directory scanned for the PiSTorm menu */
 	VLNAME wallp;				/* wallpaper image path (PNG/JPG) */

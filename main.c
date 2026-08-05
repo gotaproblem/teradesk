@@ -183,6 +183,7 @@ static CfgEntry const Options_table[] = {
 	CFG_D("wcol", options.win_colour),	/* window colour  */
 	/* Bespoke Desktop */
 	CFG_D("tbar", options.tbar),	/* taskbar on/off */
+	CFG_D("tbrh", options.tbarh),	/* taskbar height, 0 = auto */
 	CFG_S("psdr", options.psdir),	/* PiSTorm apps directory */
 	CFG_S("wall", options.wallp),	/* wallpaper image (PNG/JPG) */
 	CFG_D("walm", options.wallm),	/* wallpaper mode: 0 stretch, 1 fit */
@@ -949,6 +950,9 @@ static void opt_config(XFILE *file, int lvl, int io, int *error)
 				options.win_pattern = limpattern(options.win_pattern);
 				options.tbar = (options.tbar != 0) ? 1 : 0;	/* taskbar on/off */
 				options.wallm = (options.wallm != 0) ? 1 : 0;	/* wallpaper mode */
+
+				if (options.tbarh != 0)		/* taskbar height, if given */
+					options.tbarh = minmax(16, options.tbarh, 128);
 #if 0									/* currently not used */
 				options.vrez &= 0x0007;
 #endif
