@@ -452,7 +452,11 @@ void tb_close(void)
 {
 	if (tb_window != NULL)
 	{
-		xw_closedelete(tb_window);
+		/* note: xw_closedelete() exists in xwindow.h only - its body
+		 * is #if 0'd out in xwindow.c, so close and delete separately */
+
+		xw_close(tb_window);
+		xw_delete(tb_window);
 		tb_window = NULL;
 	}
 }
