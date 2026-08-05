@@ -395,7 +395,19 @@ static bool tb_build(void)
 
 void tb_reserve(void)
 {
-	tb_height = 2 * def_font.ch + 2 * TB_VPAD + 4;
+	/*
+	 * Match the AES menu bar: its height is the gap between the top of
+	 * the screen and the top of the desktop work area. The bar gets
+	 * that much for the cell interior (so bar text is as large as menu
+	 * text), plus the sunken bevels and padding around the cells.
+	 */
+
+	_WORD mbar = xd_desk.g_y - xd_screen.g_y;
+
+	if (mbar < def_font.ch)				/* implausible: fall back */
+		mbar = 2 * def_font.ch;
+
+	tb_height = mbar + 2 * TB_VPAD + 6;
 
 	tb_rect.g_x = xd_desk.g_x;
 	tb_rect.g_y = xd_desk.g_y + xd_desk.g_h - tb_height;
