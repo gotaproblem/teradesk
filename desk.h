@@ -174,6 +174,10 @@ typedef struct
 	_WORD win_colour;			/* window colour */
 	_WORD dsk_pattern;			/* desktop pattern  */
 	_WORD win_pattern;			/* window pattern */
+
+	/* Bespoke Desktop */
+
+	_WORD tbar;					/* taskbar on/off */
 } Options;
 
 

@@ -50,6 +50,7 @@
 #include "va.h"
 #include "video.h"
 #include "startprg.h"
+#include "taskbar.h"
 #include "main.h"
 
 #undef os_start
@@ -178,6 +179,8 @@ static CfgEntry const Options_table[] = {
 	CFG_D("dcol", options.dsk_colour),	/* desk colour  */
 	CFG_D("wpat", options.win_pattern),	/* window pattern */
 	CFG_D("wcol", options.win_colour),	/* window colour  */
+	/* Bespoke Desktop */
+	CFG_D("tbar", options.tbar),	/* taskbar on/off */
 
 	CFG_ENDG(),
 	CFG_LAST()
@@ -852,9 +855,10 @@ static void opt_default(void)
 	options.attribs = FA_DIR | FA_SYSTEM;
 #endif
 	options.aarr = 1;
+	options.tbar = 1;					/* Bespoke Desktop: taskbar on */
 
-	/* 
-	 * There is no need to set options.sort, .mode, .sexit, .dsk_pattern, 
+	/*
+	 * There is no need to set options.sort, .mode, .sexit, .dsk_pattern,
 	 * .dsk_colour, .win_pattern and .win_colour  because all of options
 	 * is set to 0 in memclr() above
 	 */
@@ -937,6 +941,7 @@ static void opt_config(XFILE *file, int lvl, int io, int *error)
 				options.attribs &= 0x0077;
 				options.dsk_pattern = limpattern(options.dsk_pattern);
 				options.win_pattern = limpattern(options.win_pattern);
+				options.tbar = (options.tbar != 0) ? 1 : 0;	/* taskbar on/off */
 #if 0									/* currently not used */
 				options.vrez &= 0x0007;
 #endif
@@ -1144,6 +1149,15 @@ static bool init(void)
 
 	xw_getwork(NULL, &xd_desk);
 
+	/*
+	 * Bespoke Desktop: reserve the taskbar strip at the bottom of the
+	 * work area before the desktop tree and the windows are set up.
+	 * If the configuration turns out to have the bar disabled,
+	 * tb_apply() below gives the space back.
+	 */
+
+	tb_reserve();
+
 	/* Find configuration files */
 
 	if (find_cfgfiles(&infname) && find_cfgfiles(&palname))
@@ -1199,6 +1213,10 @@ static bool init(void)
 		/* Load the configuration file */
 
 		load_options(CFG_LOAD_INITIAL);
+
+		/* Open the taskbar, or return its reserved space if disabled */
+
+		tb_apply();
 
 #if _MINT_
 		/* 
@@ -1601,15 +1619,15 @@ static void evntloop(void)
 		 * Do this only if there are open accessory (AV-client) windows.
 		 */
 
-		if (va_accw())
-		{
-			loopevents.ev_mtlocount = 500;	/* 500ms */
-			loopevents.ev_mflags |= MU_TIMER;	/* with timer events */
-		} else
-		{
-			loopevents.ev_mtlocount = 0;
-			loopevents.ev_mflags &= ~MU_TIMER;	/* no timer events */
-		}
+		/*
+		 * Bespoke Desktop: the timer is now always on - the taskbar
+		 * clock and PiSTorm cells are refreshed from it. This also
+		 * covers the AV-client pseudo-window updates which formerly
+		 * enabled the timer conditionally (va_accw()).
+		 */
+
+		loopevents.ev_mtlocount = 500;	/* 500ms */
+		loopevents.ev_mflags |= MU_TIMER;	/* with timer events */
 
 		/*
 		 * Enable/disable menu items depending on current context.
@@ -1633,6 +1651,11 @@ static void evntloop(void)
 #if _LOGFILE
 		fprintf(logfile, "\n loopevent 0x%x", event);
 #endif
+
+		/* Refresh the taskbar (clock, PiSTorm data) on the timer tick */
+
+		if (event & MU_TIMER)
+			tb_tick();
 
 		/* Process any recieved messages */
 
@@ -1952,6 +1975,7 @@ int main(void)
 							}
 
 							free_icons();
+							tb_close();	/* remove the taskbar window */
 							regen_desktop(NULL);
 
 							/* This is a cosmetic clearing of the screen at the end */
