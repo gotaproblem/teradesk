@@ -25,8 +25,6 @@
 #include <library.h>
 #include <xdialog.h>
 
-#include <time.h>
-
 #include "resource.h"
 #include "desk.h"
 #include "error.h"
@@ -316,34 +314,45 @@ static WD_FUNC tb_functions = {
 
 
 /*
+ * Append exactly two decimal digits (00..99) to a string
+ */
+
+static char *tb_two(char *d, _WORD v)
+{
+	*d++ = (char) ('0' + (v / 10) % 10);
+	*d++ = (char) ('0' + v % 10);
+	return d;
+}
+
+
+/*
  * Rebuild the cell texts. Returns TRUE if anything changed.
+ *
+ * Note: all formatting here is done with ltoa()/manual digits, in the
+ * style of datimstr() in dir.c - TeraDesk replaces sprintf() with a
+ * minimal formatter (stringf.c) that supports neither zero-padding
+ * nor '%%', so the standard idioms would render wrongly.
  */
 
 static bool tb_build(void)
 {
 	char new_cell[TB_NCELLS][TB_CTEXT];
 	char new_clock[8];
-	time_t now;
-	struct tm *lt;
+	unsigned short t;
+	char *p;
 	bool changed = FALSE;
 	_WORD i;
 
 	memclr(new_cell, sizeof(new_cell));
 
-	/*
-	 * The clock. Use the C library rather than raw Tgettime(): under
-	 * FreeMiNT the kernel keeps UTC and the timezone lives in the
-	 * library (TZ), so localtime() shows the correct local time there
-	 * as well as on plain TOS.
-	 */
+	/* the clock, from GEMDOS time (hhhhhmmm mmmsssss), as datimstr() does */
 
-	now = time(NULL);
-	lt = localtime(&now);
+	t = (unsigned short) Tgettime();
 
-	if (lt != NULL)
-		sprintf(new_clock, "%02d:%02d", lt->tm_hour, lt->tm_min);
-	else
-		new_clock[0] = 0;
+	p = tb_two(new_clock, (_WORD) ((t >> 11) & 0x1F));
+	*p++ = ':';
+	p = tb_two(p, (_WORD) ((t >> 5) & 0x3F));
+	*p = 0;
 
 	/* PiSTorm cells, only when PSCTRL answered the probe */
 
@@ -357,13 +366,34 @@ static bool tb_build(void)
 		strcpy(new_cell[0], "PiSTorm");
 
 		if (total > 0)
-			sprintf(new_cell[1], "JIT %ld%%", (used * 100L) / total);
+		{
+			strcpy(new_cell[1], "JIT ");
+			ltoa((used * 100L) / total, &new_cell[1][4], 10);
+			strcat(new_cell[1], "%");
+		}
 
 		if (temp > 0)
-			sprintf(new_cell[2], "CPU %ld.%ldC", temp / 1000L, (temp % 1000L) / 100L);
+		{
+			p = new_cell[2];
+			strcpy(p, "CPU ");
+			ltoa(temp / 1000L, p + 4, 10);
+			p += strlen(p);
+			*p++ = '.';
+			*p++ = (char) ('0' + (temp % 1000L) / 100L);
+			*p++ = 'C';
+			*p = 0;
+		}
 
 		if (load >= 0)
-			sprintf(new_cell[3], "load %ld.%02ld", load / 100L, load % 100L);
+		{
+			p = new_cell[3];
+			strcpy(p, "load ");
+			ltoa(load / 100L, p + 5, 10);
+			p += strlen(p);
+			*p++ = '.';
+			p = tb_two(p, (_WORD) (load % 100L));
+			*p = 0;
+		}
 	}
 
 	for (i = 0; i < TB_NCELLS; i++)
