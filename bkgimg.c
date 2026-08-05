@@ -30,8 +30,10 @@
 #include "error.h"
 #include "lists.h"						/* LSTYPE, needed by slider.h */
 #include "slider.h"						/* SLIDER, needed by icon.h */
-#include "xfilesys.h"					/* XFILE, needed by icon.h */
+#include "xfilesys.h"					/* XFILE, needed by window.h/icon.h */
 #include "config.h"
+#include "font.h"						/* XDFONT, needed by window.h */
+#include "window.h"						/* ITMTYPE, needed by icon.h */
 #include "icon.h"
 #include "bkgimg.h"
 
@@ -193,8 +195,8 @@ void bk_init(void)
 	mode = (options.wallm == 0) ? PSIMG_MODE_STRETCH : PSIMG_MODE_FIT;
 
 	result = ops->call(id | PSIMG_LOAD,
-					   (long) (uint32_t) virt_to_phys(options.wallp),
-					   (long) (uint32_t) virt_to_phys(bk_buf),
+					   (long) (unsigned long) virt_to_phys(options.wallp),
+					   (long) (unsigned long) virt_to_phys(bk_buf),
 					   (long) w, (long) h, (long) xd_nplanes, (long) mode);
 
 	if (result != 0)

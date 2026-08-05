@@ -28,8 +28,12 @@
 #include "resource.h"
 #include "desk.h"
 #include "error.h"
-#include "xfilesys.h"
+#include "xfilesys.h"					/* XFILE, needed by window.h */
 #include "file.h"
+#include "lists.h"						/* LSTYPE, needed by filetype.h */
+#include "font.h"						/* XDFONT, needed by window.h */
+#include "window.h"						/* wd_upd_type, needed by applik.h */
+#include "filetype.h"					/* FTYPE; must be before applik.h */
 #include "prgtype.h"
 #include "applik.h"
 #include "psmenu.h"
