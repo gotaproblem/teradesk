@@ -70,6 +70,8 @@
 #define PS_STAT_CACHE_TOTAL	40L
 #define PS_HOST_SOC_TEMP_MC	64L
 #define PS_HOST_LOADAVG_X100 66L
+#define PS_HOST_TIME_DOS	68L
+#define PS_HOST_DATE_DOS	69L
 
 #define TB_NCELLS			4		/* name/cpu, cache, temp, load */
 #define TB_CTEXT			28		/* max cell text length */
@@ -103,6 +105,32 @@ static _WORD tb_ch;
 static long tb_ps(long index)
 {
 	return tb_nf->call(tb_psid | PSCTRL_GETINT, index);
+}
+
+
+/*
+ * Set the GEMDOS clock from the Pi's (NTP-synced) wall clock. The
+ * Atari has no battery RTC, so without this the system time counts
+ * from 00:00 at power-on - wrong on the taskbar and on every file
+ * timestamp. Called at startup and hourly against drift. Harmless
+ * no-op on an emulator without the time indices (returns -1).
+ */
+
+static void tb_timesync(void)
+{
+	long dd, dt;
+
+	if (tb_psid == 0)
+		return;
+
+	dd = tb_ps(PS_HOST_DATE_DOS);
+	dt = tb_ps(PS_HOST_TIME_DOS);
+
+	if (dd > 0 && dt >= 0)
+	{
+		Tsetdate((_UWORD) dd);
+		Tsettime((_UWORD) dt);
+	}
 }
 
 
@@ -466,6 +494,8 @@ static void tb_open(void)
 	if (tb_nf != NULL)
 		tb_psid = nf_get_id("PSCTRL");
 
+	tb_timesync();						/* set the system clock from the Pi */
+
 	size = tb_rect;
 
 	tb_window = xw_create(BAR_WIND, &tb_functions, 0, &size, sizeof(TB_WINDOW), NULL, &error);
@@ -536,8 +566,18 @@ void tb_apply(void)
 
 void tb_tick(void)
 {
+	static _WORD resync = 0;
+
 	if (tb_window == NULL)
 		return;
+
+	/* hourly clock re-sync against drift (7200 ticks of 500 ms) */
+
+	if (++resync >= 7200)
+	{
+		resync = 0;
+		tb_timesync();
+	}
 
 	if (tb_build() || tb_dirty)
 		tb_update(NULL);
