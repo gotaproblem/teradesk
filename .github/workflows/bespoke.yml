@@ -1,0 +1,44 @@
+#
+# Bespoke Desktop build - runs on every push to the 'bespoke' branch.
+#
+# Installs the m68k-atari-mint cross-toolchain (same snapshots the
+# upstream workflow uses), builds desktop.prg, and publishes it as a
+# downloadable artifact on the run page (repository -> Actions tab ->
+# pick the run -> "Artifacts" box).
+#
+# Unlike the inherited build.yml this does not deploy anywhere and
+# needs no secrets, so it works on any fork as-is.
+#
+name: Bespoke build
+
+on:
+  push:
+    branches: [ bespoke ]
+  pull_request:
+    branches: [ bespoke ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      CROSS_TOOL: m68k-atari-mint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross-toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget bzip2
+          SYSROOT_DIR="/" ./.scripts/install-freemint.sh binutils gcc mintbin
+          ./.scripts/install-freemint.sh mintlib fdlibm gemlib
+
+      - name: Build
+        run: make
+
+      - name: Upload desktop.prg
+        uses: actions/upload-artifact@v4
+        with:
+          name: bespoke-desktop
+          path: desktop.prg
+          if-no-files-found: error
