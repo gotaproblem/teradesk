@@ -74,6 +74,7 @@
 #define PS_HOST_SOC_TEMP_MC	64L
 #define PS_HOST_TIME_DOS	68L
 #define PS_HOST_DATE_DOS	69L
+#define PS_HOST_THROTTLED	70L
 
 #define DEGREE_CH			'\370'		/* 0xF8: degree sign in the Atari charset */
 
@@ -99,6 +100,8 @@ static char tb_cell[TB_NCELLS][TB_CTEXT];	/* left-hand cell texts */
 static char tb_clock[24];					/* right-hand date + clock text */
 static char tb_cpustr[16];					/* "68040/FPU" etc., built once */
 static GRECT tb_badge;						/* screen rect of the PiSTorm button */
+static _WORD tb_throttled = 0;				/* Pi reports active throttling */
+static _WORD tb_flash = 0;					/* alert flash phase, toggles per tick */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
 static _WORD tb_cw;							/* actual text cell metrics in use */
 static _WORD tb_ch;
@@ -177,13 +180,23 @@ static void tb_line(_WORD x1, _WORD y1, _WORD x2, _WORD y2, _WORD colour)
  * Text is drawn in the default (window text) font.
  */
 
-static void tb_drawcell(_WORD *x, char *text, bool raised)
+static void tb_drawcell(_WORD *x, char *text, bool raised, bool alert)
 {
 	_WORD dark = (xd_ncolours >= 16) ? G_LBLACK : G_BLACK;
 	_WORD w = (_WORD) strlen(text) * tb_cw + 2 * TB_HPAD;
 	_WORD y1 = tb_rect.g_y + TB_VPAD;
 	_WORD y2 = tb_rect.g_y + tb_rect.g_h - TB_VPAD - 1;
+	_WORD bg = G_WHITE;
+	_WORD fg = G_BLACK;
 	GRECT in;
+
+	if (alert)
+	{
+		/* alert phase: red cell, white text (inverted on mono) */
+
+		bg = (xd_ncolours >= 16) ? G_RED : G_BLACK;
+		fg = G_WHITE;
+	}
 
 	/* cell interior */
 
@@ -191,7 +204,7 @@ static void tb_drawcell(_WORD *x, char *text, bool raised)
 	in.g_y = y1 + 1;
 	in.g_w = w - 2;
 	in.g_h = y2 - y1 - 1;
-	clr_object(&in, G_WHITE, -1);
+	clr_object(&in, bg, -1);
 
 	if (raised)
 	{
@@ -213,7 +226,9 @@ static void tb_drawcell(_WORD *x, char *text, bool raised)
 
 	/* the text; the font is set to top-of-cell alignment */
 
+	vst_color(vdi_handle, fg);
 	w_transptext(*x + TB_HPAD, in.g_y + (in.g_h - tb_ch) / 2, text);
+	vst_color(vdi_handle, G_BLACK);
 
 	*x += w + TB_GAP;
 }
@@ -277,8 +292,9 @@ static void tb_drawpart(GRECT *clip)
 		if (tb_cell[i][0] != 0)
 		{
 			_WORD x0 = x;
+			bool alert = (i == 3 && tb_throttled != 0 && tb_flash != 0);
 
-			tb_drawcell(&x, tb_cell[i], (i == 0));
+			tb_drawcell(&x, tb_cell[i], (i == 0), alert);
 
 			if (i == 0)
 			{
@@ -296,7 +312,7 @@ static void tb_drawpart(GRECT *clip)
 	{
 		x = tb_rect.g_x + tb_rect.g_w - TB_GAP -
 			((_WORD) strlen(tb_clock) * tb_cw + 2 * TB_HPAD);
-		tb_drawcell(&x, tb_clock, FALSE);
+		tb_drawcell(&x, tb_clock, FALSE, FALSE);
 	}
 
 	xd_clip_off();
@@ -536,6 +552,21 @@ static bool tb_build(void)
 		long temp = tb_ps(PS_HOST_SOC_TEMP_MC);
 		long used = tb_ps(PS_STAT_CACHE_USED);
 		long total = tb_ps(PS_STAT_CACHE_TOTAL);
+		long thr = tb_ps(PS_HOST_THROTTLED);
+
+		/* Flash the temperature cell while the Pi firmware reports an
+		 * ACTIVE throttle condition (low nibble: undervoltage, freq
+		 * cap, throttling, soft temp limit). thr < 0 = old emulator. */
+
+		{
+			_WORD was = tb_throttled;
+
+			tb_throttled = (thr > 0 && (thr & 0x0FL) != 0) ? 1 : 0;
+			tb_flash = tb_throttled ? (_WORD) (tb_flash ^ 1) : 0;
+
+			if (tb_throttled || was)	/* flashing, or clearing the red */
+				changed = TRUE;
+		}
 
 		strcpy(new_cell[0], "PiSTorm");
 
