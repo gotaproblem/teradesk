@@ -35,6 +35,7 @@
 #include "font.h"
 #include "screen.h"
 #include "window.h"
+#include "dir.h"						/* dir_font: the user's window font */
 #include "taskbar.h"
 #include "pstask.h"
 
@@ -359,7 +360,7 @@ static _WORD mn_visrows(void)
 	xw_getwork(mn_win, &work);
 
 	{
-		_WORD n = (work.g_h / def_font.ch) - (MN_MEMROWS + 2);
+		_WORD n = (work.g_h / dir_font.ch) - (MN_MEMROWS + 2);
 
 		return (n < 0) ? 0 : n;
 	}
@@ -413,7 +414,7 @@ static void mn_slider(void)
 
 static void mn_text(GRECT *work, _WORD col, _WORD row, char *s)
 {
-	w_transptext(work->g_x + col * def_font.cw, work->g_y + row * def_font.ch, s);
+	w_transptext(work->g_x + col * dir_font.cw, work->g_y + row * dir_font.ch, s);
 }
 
 
@@ -421,10 +422,10 @@ static void mn_text(GRECT *work, _WORD col, _WORD row, char *s)
 
 static void mn_bar(GRECT *work, _WORD col, _WORD row, _WORD cols, _WORD p)
 {
-	_WORD x0 = work->g_x + col * def_font.cw;
-	_WORD y0 = work->g_y + row * def_font.ch + 2;
-	_WORD w = cols * def_font.cw;
-	_WORD h = def_font.ch - 4;
+	_WORD x0 = work->g_x + col * dir_font.cw;
+	_WORD y0 = work->g_y + row * dir_font.ch + 2;
+	_WORD w = cols * dir_font.cw;
+	_WORD h = dir_font.ch - 4;
 	_WORD fill;
 	_WORD f[10];
 	GRECT r;
@@ -519,7 +520,7 @@ static void mn_memrow(GRECT *work, _WORD row, char *label, long freeb, long tota
 
 static void mn_contents(GRECT *work)
 {
-	set_txt_default(&def_font);
+	set_txt_default(&dir_font);
 
 	mn_memrow(work, 0, s_stram, st_free, st_total);
 
@@ -754,8 +755,8 @@ void mn_open(void)
 	mn_sample();
 	mn_sig = -1;
 
-	ww = MN_COLS * def_font.cw;
-	wh = MN_DEFROWS * def_font.ch;
+	ww = MN_COLS * dir_font.cw;
+	wh = MN_DEFROWS * dir_font.ch;
 
 	wrk.g_x = xd_desk.g_x + 16;
 	wrk.g_y = xd_desk.g_y + 16;
@@ -768,6 +769,12 @@ void mn_open(void)
 		size.g_w = xd_desk.g_w;
 	if (size.g_h > xd_desk.g_h)
 		size.g_h = xd_desk.g_h;
+
+	/* Home position: bottom-left of the desktop, directly above the
+	 * PiSTorm button on the taskbar it was opened from */
+
+	size.g_x = xd_desk.g_x;
+	size.g_y = xd_desk.g_y + xd_desk.g_h - size.g_h;
 
 	mn_win = xw_create(MON_WIND, &mn_functions, kind, &size, sizeof(MON_WINDOW), NULL, &error);
 
