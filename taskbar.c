@@ -96,7 +96,7 @@ static long tb_psid = 0;			/* PSCTRL feature id; 0 = not present */
 static struct nf_ops *tb_nf = NULL;	/* NatFeats call table */
 
 static char tb_cell[TB_NCELLS][TB_CTEXT];	/* left-hand cell texts */
-static char tb_clock[8];					/* right-hand clock text */
+static char tb_clock[24];					/* right-hand date + clock text */
 static char tb_cpustr[16];					/* "68040/FPU" etc., built once */
 static GRECT tb_badge;						/* screen rect of the PiSTorm button */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
@@ -403,6 +403,34 @@ static char *tb_two(char *d, _WORD v)
 
 
 /*
+ * Append a string (no padding)
+ */
+
+static char *tb_app(char *d, const char *s)
+{
+	while (*s)
+		*d++ = *s++;
+
+	return d;
+}
+
+
+/*
+ * Day of week, 0 = Sunday (Sakamoto's method)
+ */
+
+static _WORD tb_dow(_WORD y, _WORD m, _WORD d)
+{
+	static const _WORD t[12] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
+
+	if (m < 3)
+		y -= 1;
+
+	return (_WORD) ((y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7);
+}
+
+
+/*
  * Rebuild the cell texts. Returns TRUE if anything changed.
  *
  * Note: all formatting here is done with ltoa()/manual digits, in the
@@ -413,22 +441,92 @@ static char *tb_two(char *d, _WORD v)
 
 static bool tb_build(void)
 {
+	static const char *const dayn[7] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+	static const char *const monn[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+										  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 	char new_cell[TB_NCELLS][TB_CTEXT];
-	char new_clock[8];
+	char new_clock[24];
 	unsigned short t;
+	_WORD hh, mm;
 	char *p;
 	bool changed = FALSE;
 	_WORD i;
 
 	memclr(new_cell, sizeof(new_cell));
 
-	/* the clock, from GEMDOS time (hhhhhmmm mmmsssss), as datimstr() does */
+	/*
+	 * Date and clock, from GEMDOS time/date words, as datimstr() does.
+	 * Formats (teradesk.inf):
+	 *   tbdf = 0  "Thu 6 Aug ..."  (default)
+	 *   tbdf = 1  "Thu Aug 6 ..."
+	 *   tbdf = 2  no date, clock only
+	 *   tbtf = 0  24-hour "02:35" (default)
+	 *   tbtf = 1  12-hour "2:35am"
+	 */
 
 	t = (unsigned short) Tgettime();
+	hh = (_WORD) ((t >> 11) & 0x1F);
+	mm = (_WORD) ((t >> 5) & 0x3F);
 
-	p = tb_two(new_clock, (_WORD) ((t >> 11) & 0x1F));
-	*p++ = ':';
-	p = tb_two(p, (_WORD) ((t >> 5) & 0x3F));
+	p = new_clock;
+
+	if (options.tbdf != 2)
+	{
+		unsigned short dt = (unsigned short) Tgetdate();
+		_WORD yy = (_WORD) (1980 + ((dt >> 9) & 0x7F));
+		_WORD mo = (_WORD) ((dt >> 5) & 0x0F);
+		_WORD dd = (_WORD) (dt & 0x1F);
+
+		if (mo < 1)
+			mo = 1;
+		if (mo > 12)
+			mo = 12;
+		if (dd < 1)
+			dd = 1;
+
+		p = tb_app(p, dayn[tb_dow(yy, mo, dd)]);
+		*p++ = ' ';
+
+		if (options.tbdf == 1)
+		{
+			p = tb_app(p, monn[mo - 1]);	/* "Thu Aug 6" */
+			*p++ = ' ';
+
+			if (dd >= 10)
+				*p++ = (char) ('0' + dd / 10);
+			*p++ = (char) ('0' + dd % 10);
+		} else
+		{
+			if (dd >= 10)					/* "Thu 6 Aug" */
+				*p++ = (char) ('0' + dd / 10);
+			*p++ = (char) ('0' + dd % 10);
+			*p++ = ' ';
+			p = tb_app(p, monn[mo - 1]);
+		}
+
+		*p++ = ' ';
+	}
+
+	if (options.tbtf == 1)
+	{
+		_WORD h12 = hh % 12;				/* 12-hour with am/pm */
+
+		if (h12 == 0)
+			h12 = 12;
+
+		if (h12 >= 10)
+			*p++ = (char) ('0' + h12 / 10);
+		*p++ = (char) ('0' + h12 % 10);
+		*p++ = ':';
+		p = tb_two(p, mm);
+		p = tb_app(p, (hh >= 12) ? "pm" : "am");
+	} else
+	{
+		p = tb_two(p, hh);					/* 24-hour */
+		*p++ = ':';
+		p = tb_two(p, mm);
+	}
+
 	*p = 0;
 
 	/* PiSTorm cells, only when PSCTRL answered the probe */

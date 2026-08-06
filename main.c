@@ -184,6 +184,8 @@ static CfgEntry const Options_table[] = {
 	/* Bespoke Desktop */
 	CFG_D("tbar", options.tbar),	/* taskbar on/off */
 	CFG_D("tbrh", options.tbarh),	/* taskbar height, 0 = auto */
+	CFG_D("tbtf", options.tbtf),	/* taskbar time format: 0 24h, 1 12h */
+	CFG_D("tbdf", options.tbdf),	/* taskbar date format: 0/1/2 */
 	CFG_S("psdr", options.psdir),	/* PiSTorm apps directory */
 	CFG_S("wall", options.wallp),	/* wallpaper image (PNG/JPG) */
 	CFG_D("walm", options.wallm),	/* wallpaper mode: 0 stretch, 1 fit */
@@ -953,6 +955,9 @@ static void opt_config(XFILE *file, int lvl, int io, int *error)
 
 				if (options.tbarh != 0)		/* taskbar height, if given */
 					options.tbarh = minmax(16, options.tbarh, 128);
+
+				options.tbtf = (options.tbtf != 0) ? 1 : 0;	/* time format */
+				options.tbdf = minmax(0, options.tbdf, 2);	/* date format */
 #if 0									/* currently not used */
 				options.vrez &= 0x0007;
 #endif
