@@ -549,10 +549,18 @@ static bool tb_build(void)
 
 	if (tb_psid != 0)
 	{
-		long temp = tb_ps(PS_HOST_SOC_TEMP_MC);
+		static _WORD tslow = 0;			/* temperature refresh divider */
+		long temp;
 		long used = tb_ps(PS_STAT_CACHE_USED);
 		long total = tb_ps(PS_STAT_CACHE_TOTAL);
 		long thr = tb_ps(PS_HOST_THROTTLED);
+
+		/* The temperature is displayed at a gentler cadence - every
+		 * 4th tick (2 s) - so the last digit does not flicker; -1
+		 * in between means "keep showing the current value". The
+		 * throttle alert above stays at full tick rate. */
+
+		temp = ((tslow++ & 3) == 0) ? tb_ps(PS_HOST_SOC_TEMP_MC) : -1L;
 
 		/* Flash the temperature cell while the Pi firmware reports an
 		 * ACTIVE throttle condition (low nibble: undervoltage, freq
@@ -591,6 +599,11 @@ static bool tb_build(void)
 			*p++ = DEGREE_CH;
 			*p++ = 'C';
 			*p = 0;
+		} else
+		{
+			/* off-cadence tick: keep showing the current value */
+
+			strcpy(new_cell[3], tb_cell[3]);
 		}
 	}
 
