@@ -102,6 +102,21 @@ static char tb_cpustr[16];					/* "68040/FPU" etc., built once */
 static GRECT tb_badge;						/* screen rect of the PiSTorm button */
 static _WORD tb_throttled = 0;				/* Pi reports active throttling */
 static _WORD tb_flash = 0;					/* alert flash phase, toggles per tick */
+static GRECT tb_clockr;						/* screen rect of the clock cell */
+
+/* Hover state: which rect MU_M1 watches, and what the mouse is over */
+
+#define TB_HOV_NONE		-1
+#define TB_HOV_BADGE	0
+#define TB_HOV_CLOCK	1
+
+static _WORD tb_hovin = 0;					/* 0 = mouse outside bar, 1 = inside */
+static GRECT tb_hovrect;					/* rect currently watched by MU_M1 */
+static _WORD tb_hovtgt = TB_HOV_NONE;		/* what the mouse is hovering over */
+static _WORD tb_dwell = 0;					/* ticks spent hovering the target */
+
+static WINDOW *tip_win = NULL;				/* the uptime tooltip window */
+static char tip_text[32];
 static bool tb_dirty = FALSE;				/* content changed since drawn */
 static _WORD tb_cw;							/* actual text cell metrics in use */
 static _WORD tb_ch;
@@ -306,13 +321,21 @@ static void tb_drawpart(GRECT *clip)
 		}
 	}
 
-	/* the clock, right-aligned */
+	/* the clock, right-aligned; remember its rect for hover */
 
 	if (tb_clock[0] != 0)
 	{
+		_WORD x0;
+
 		x = tb_rect.g_x + tb_rect.g_w - TB_GAP -
 			((_WORD) strlen(tb_clock) * tb_cw + 2 * TB_HPAD);
+		x0 = x;
 		tb_drawcell(&x, tb_clock, FALSE, FALSE);
+
+		tb_clockr.g_x = x0;
+		tb_clockr.g_y = tb_rect.g_y + TB_VPAD;
+		tb_clockr.g_w = x - TB_GAP - x0;
+		tb_clockr.g_h = tb_rect.g_h - 2 * TB_VPAD;
 	}
 
 	xd_clip_off();
@@ -382,6 +405,158 @@ static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 	{
 		mn_open();
 	}
+}
+
+
+/* ---- the uptime tooltip ------------------------------------------------ */
+
+static char *tb_two(char *d, _WORD v);
+static char *tb_app(char *d, const char *s);
+
+typedef struct
+{
+	XW_INTVARS;
+} TIP_WINDOW;
+
+
+/*
+ * Draw the tooltip: pale box, black frame, the uptime text
+ */
+
+static void tip_draw(WINDOW *w, GRECT *area)
+{
+	GRECT r1, r2, in, work;
+	_WORD f[10];
+
+	(void) area;
+
+	if (tip_win == NULL)
+		return;
+
+	xw_getwork(tip_win, &work);
+
+	r1 = work;
+
+	xd_begupdate();
+	xd_mouse_off();
+
+	xw_getfirst(tip_win, &r2);
+
+	while (r2.g_w != 0 && r2.g_h != 0)
+	{
+		if (xd_rcintersect(&r1, &r2, &in))
+		{
+			xd_clip_on(&in);
+
+			clr_object(&work, G_WHITE, -1);
+
+			vsl_color(vdi_handle, G_BLACK);
+			f[0] = work.g_x;
+			f[1] = work.g_y;
+			f[2] = work.g_x + work.g_w - 1;
+			f[3] = work.g_y;
+			f[4] = work.g_x + work.g_w - 1;
+			f[5] = work.g_y + work.g_h - 1;
+			f[6] = work.g_x;
+			f[7] = work.g_y + work.g_h - 1;
+			f[8] = work.g_x;
+			f[9] = work.g_y;
+			v_pline(vdi_handle, 5, f);
+
+			tb_setfont();
+			vst_color(vdi_handle, G_BLACK);
+			w_transptext(work.g_x + TB_HPAD, work.g_y + (work.g_h - tb_ch) / 2, tip_text);
+
+			xd_clip_off();
+		}
+
+		xw_getnext(tip_win, &r2);
+	}
+
+	xd_mouse_on();
+	xd_endupdate();
+
+	(void) w;
+}
+
+
+static WD_FUNC tip_functions = {
+	0L,									/* handle keypress */
+	0L,									/* handle button */
+	tip_draw,							/* redraw */
+	xw_nop1,							/* topped */
+	xw_nop1,							/* bottomed */
+	xw_nop1,							/* newtop */
+	0L,									/* closed */
+	0L,									/* fulled */
+	xw_nop2,							/* arrowed */
+	0L,									/* hslid */
+	0L,									/* vslid */
+	0L,									/* sized */
+	0L,									/* moved */
+	0L,									/* hndlmenu */
+	0L,									/* top */
+	0L,									/* iconify */
+	0L									/* uniconify */
+};
+
+
+static void tip_close(void)
+{
+	if (tip_win != NULL)
+	{
+		xw_close(tip_win);
+		xw_delete(tip_win);
+		tip_win = NULL;
+	}
+}
+
+
+/*
+ * Open the uptime tooltip above the clock cell
+ */
+
+static void tip_open(void)
+{
+	GRECT size;
+	long up;
+	char *p;
+	int error;
+
+	if (tip_win != NULL || tb_psid == 0)
+		return;
+
+	up = tb_ps(67L);					/* PS_HOST_UPTIME_S */
+
+	if (up < 0)
+		return;
+
+	/* "Pi up 3d 04:12" */
+
+	p = tb_app(tip_text, "Pi up ");
+
+	if (up >= 86400L)
+	{
+		ltoa(up / 86400L, p, 10);
+		p += strlen(p);
+		*p++ = 'd';
+		*p++ = ' ';
+	}
+
+	p = tb_two(p, (_WORD) ((up % 86400L) / 3600L));
+	*p++ = ':';
+	p = tb_two(p, (_WORD) ((up % 3600L) / 60L));
+	*p = 0;
+
+	size.g_w = (_WORD) strlen(tip_text) * tb_cw + 2 * TB_HPAD;
+	size.g_h = tb_ch + 6;
+	size.g_x = tb_clockr.g_x + tb_clockr.g_w - size.g_w;
+	size.g_y = tb_rect.g_y - size.g_h - 2;
+
+	tip_win = xw_create(TIP_WIND, &tip_functions, 0, &size, sizeof(TIP_WINDOW), NULL, &error);
+
+	if (tip_win != NULL)
+		xw_open(tip_win, &size);
 }
 
 
@@ -770,6 +945,83 @@ void tb_apply(void)
 }
 
 
+/* ---- hover: menu-bar-like behaviour via MU_M1 -------------------------- */
+
+/*
+ * Arm the mouse-rectangle event for the current hover state. Outside
+ * the bar, MU_M1 fires when the mouse ENTERS the bar; inside, it fires
+ * when the mouse LEAVES the rect it is over (a cell, or a small box
+ * around the pointer in dead space, so cell-to-cell moves re-evaluate).
+ */
+
+void tb_track(XDEVENT *ev)
+{
+	if (tb_window == NULL)
+		return;
+
+	if (!tb_hovin)
+		tb_hovrect = tb_rect;
+
+	ev->ev_mflags |= MU_M1;
+	ev->ev_mm1flags = tb_hovin ? 1 : 0;	/* 1 = on leave, 0 = on enter */
+	ev->ev_mm1 = tb_hovrect;
+}
+
+
+/*
+ * Handle a MU_M1 event: re-evaluate what the mouse is over
+ */
+
+void tb_hover(_WORD x, _WORD y)
+{
+	_WORD tgt = TB_HOV_NONE;
+
+	if (tb_window == NULL)
+		return;
+
+	if (x >= tb_rect.g_x && x < tb_rect.g_x + tb_rect.g_w &&
+		y >= tb_rect.g_y && y < tb_rect.g_y + tb_rect.g_h)
+	{
+		tb_hovin = 1;
+
+		if (tb_badge.g_w > 0 &&
+			x >= tb_badge.g_x && x < tb_badge.g_x + tb_badge.g_w &&
+			y >= tb_badge.g_y && y < tb_badge.g_y + tb_badge.g_h)
+		{
+			tgt = TB_HOV_BADGE;
+			tb_hovrect = tb_badge;
+		} else if (tb_clockr.g_w > 0 &&
+			x >= tb_clockr.g_x && x < tb_clockr.g_x + tb_clockr.g_w &&
+			y >= tb_clockr.g_y && y < tb_clockr.g_y + tb_clockr.g_h)
+		{
+			tgt = TB_HOV_CLOCK;
+			tb_hovrect = tb_clockr;
+		} else
+		{
+			/* dead space: watch a small box around the pointer */
+
+			tb_hovrect.g_x = x - 4;
+			tb_hovrect.g_y = y - 4;
+			tb_hovrect.g_w = 8;
+			tb_hovrect.g_h = 8;
+		}
+	} else
+	{
+		tb_hovin = 0;					/* left the bar */
+		tb_hovrect = tb_rect;
+	}
+
+	if (tgt != tb_hovtgt)
+	{
+		tb_hovtgt = tgt;
+		tb_dwell = 0;
+
+		if (tgt != TB_HOV_CLOCK)
+			tip_close();				/* moved off the clock */
+	}
+}
+
+
 /*
  * The 500 ms timer tick from evntloop(): refresh contents,
  * redraw only if something actually changed.
@@ -781,6 +1033,20 @@ void tb_tick(void)
 
 	if (tb_window == NULL)
 		return;
+
+	/* Hover dwell: after one tick over a target, act - unless a modal
+	 * dialog is open */
+
+	if (tb_hovtgt != TB_HOV_NONE && xd_dialogs == NULL)
+	{
+		if (tb_dwell < 2 && ++tb_dwell == 2)
+		{
+			if (tb_hovtgt == TB_HOV_BADGE)
+				mn_open();
+			else if (tb_hovtgt == TB_HOV_CLOCK)
+				tip_open();
+		}
+	}
 
 	/* hourly clock re-sync against drift (7200 ticks of 500 ms) */
 
@@ -805,6 +1071,7 @@ void tb_tick(void)
 
 void tb_close(void)
 {
+	tip_close();						/* the tooltip, */
 	mn_close();							/* the monitor window too */
 
 	if (tb_window != NULL)

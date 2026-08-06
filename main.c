@@ -1661,6 +1661,10 @@ static void evntloop(void)
 		loopevents.ev_mtlocount = 500;	/* 500ms */
 		loopevents.ev_mflags |= MU_TIMER;	/* with timer events */
 
+		/* Taskbar hover tracking (menu-bar-like popups) via MU_M1 */
+
+		tb_track(&loopevents);
+
 		/*
 		 * Enable/disable menu items depending on current context.
 		 * Note: in order for this to work with AV-protcol clients
@@ -1688,6 +1692,11 @@ static void evntloop(void)
 
 		if (event & MU_TIMER)
 			tb_tick();
+
+		/* Mouse entered/left a taskbar hover rectangle */
+
+		if (event & MU_M1)
+			tb_hover(loopevents.ev_mmox, loopevents.ev_mmoy);
 
 		/* Process any recieved messages */
 

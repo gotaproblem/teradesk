@@ -39,4 +39,9 @@ void tb_tick(void);						/* 500 ms timer callback from evntloop() */
 void tb_close(void);					/* close the bar window at shutdown */
 long tb_psget(long index);				/* PSCTRL PS_GETINT; -1 if absent */
 
+/* Hover (mouse-rectangle) support; XDEVENT from xdialog.h */
+
+void tb_track(XDEVENT *ev);				/* arm MU_M1 for the current hover state */
+void tb_hover(_WORD x, _WORD y);		/* handle a MU_M1 event at (x,y) */
+
 #endif

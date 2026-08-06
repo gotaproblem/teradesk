@@ -30,6 +30,7 @@
 #define CON_WIND		20 /* currently not used */
 #define BAR_WIND		21 /* Bespoke Desktop taskbar */
 #define MON_WIND		22 /* Bespoke Desktop PiSTorm monitor */
+#define TIP_WIND		23 /* Bespoke Desktop taskbar tooltip */
 
 #define TFLAGS			(NAME|CLOSER|FULLER|MOVER|SIZER|UPARROW|DNARROW|VSLIDE|LFARROW|RTARROW|HSLIDE|ICONIFIER)
 #define DFLAGS			(NAME|CLOSER|FULLER|MOVER|SIZER|UPARROW|DNARROW|VSLIDE|LFARROW|RTARROW|HSLIDE|ICONIFIER|INFO)
