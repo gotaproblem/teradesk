@@ -21,22 +21,18 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02111-1307 USA
  */
 
-#ifndef __TASKBAR_H__
-#define __TASKBAR_H__
+#ifndef __PSTASK_H__
+#define __PSTASK_H__
 
 /*
- * Bespoke Desktop taskbar: a borderless window along the bottom of the
- * screen showing a clock and, when running on PiSTorm-Atari-JIT, live
- * emulator data (CPU temperature, JIT cache use, Pi load) obtained
- * through the PSCTRL NatFeat.
+ * Bespoke Desktop PiSTorm monitor window: ST/TT memory usage and, under
+ * FreeMiNT, a scrollable list of running tasks (from u:\proc, as the
+ * standalone PSMON did). Opened by clicking the PiSTorm badge on the
+ * taskbar; refreshed from the taskbar's 500 ms tick.
  */
 
-extern _WORD tb_height;					/* reserved strip height; 0 = no bar */
-
-void tb_reserve(void);					/* shrink xd_desk before dsk_init() */
-void tb_apply(void);					/* open bar / return space, per options.tbar */
-void tb_tick(void);						/* 500 ms timer callback from evntloop() */
-void tb_close(void);					/* close the bar window at shutdown */
-long tb_psget(long index);				/* PSCTRL PS_GETINT; -1 if absent */
+void mn_open(void);						/* open (or top) the monitor window */
+void mn_tick(void);						/* periodic refresh while open */
+void mn_close(void);					/* close the window */
 
 #endif

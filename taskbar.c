@@ -39,6 +39,7 @@
 #include "window.h"
 #include "icon.h"
 #include "taskbar.h"
+#include "pstask.h"
 
 
 /*
@@ -97,6 +98,7 @@ static struct nf_ops *tb_nf = NULL;	/* NatFeats call table */
 static char tb_cell[TB_NCELLS][TB_CTEXT];	/* left-hand cell texts */
 static char tb_clock[8];					/* right-hand clock text */
 static char tb_cpustr[16];					/* "68040/FPU" etc., built once */
+static GRECT tb_badge;						/* screen rect of the PiSTorm button */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
 static _WORD tb_cw;							/* actual text cell metrics in use */
 static _WORD tb_ch;
@@ -109,6 +111,20 @@ static _WORD tb_ch;
 static long tb_ps(long index)
 {
 	return tb_nf->call(tb_psid | PSCTRL_GETINT, index);
+}
+
+
+/*
+ * Public PS_GETINT for other modules (the monitor window);
+ * returns -1 when PSCTRL is not present
+ */
+
+long tb_psget(long index)
+{
+	if (tb_psid == 0)
+		return -1L;
+
+	return tb_ps(index);
 }
 
 
@@ -161,7 +177,7 @@ static void tb_line(_WORD x1, _WORD y1, _WORD x2, _WORD y2, _WORD colour)
  * Text is drawn in the default (window text) font.
  */
 
-static void tb_drawcell(_WORD *x, char *text)
+static void tb_drawcell(_WORD *x, char *text, bool raised)
 {
 	_WORD dark = (xd_ncolours >= 16) ? G_LBLACK : G_BLACK;
 	_WORD w = (_WORD) strlen(text) * tb_cw + 2 * TB_HPAD;
@@ -177,12 +193,23 @@ static void tb_drawcell(_WORD *x, char *text)
 	in.g_h = y2 - y1 - 1;
 	clr_object(&in, G_WHITE, -1);
 
-	/* sunken bevel: dark top/left, light bottom/right */
+	if (raised)
+	{
+		/* raised bevel: this cell is a button (the PiSTorm badge) */
 
-	tb_line(*x, y1, *x + w - 1, y1, dark);
-	tb_line(*x, y1, *x, y2, dark);
-	tb_line(*x, y2, *x + w - 1, y2, G_WHITE);
-	tb_line(*x + w - 1, y1 + 1, *x + w - 1, y2, G_WHITE);
+		tb_line(*x, y1, *x + w - 1, y1, G_WHITE);
+		tb_line(*x, y1, *x, y2, G_WHITE);
+		tb_line(*x, y2, *x + w - 1, y2, dark);
+		tb_line(*x + w - 1, y1 + 1, *x + w - 1, y2, dark);
+	} else
+	{
+		/* sunken bevel: dark top/left, light bottom/right */
+
+		tb_line(*x, y1, *x + w - 1, y1, dark);
+		tb_line(*x, y1, *x, y2, dark);
+		tb_line(*x, y2, *x + w - 1, y2, G_WHITE);
+		tb_line(*x + w - 1, y1 + 1, *x + w - 1, y2, G_WHITE);
+	}
 
 	/* the text; the font is set to top-of-cell alignment */
 
@@ -240,14 +267,27 @@ static void tb_drawpart(GRECT *clip)
 	tb_line(tb_rect.g_x, tb_rect.g_y + tb_rect.g_h - 1,
 			tb_rect.g_x + tb_rect.g_w - 1, tb_rect.g_y + tb_rect.g_h - 1, dark);
 
-	/* left-hand cells */
+	/* left-hand cells; cell 0 (the PiSTorm badge) is a raised button
+	 * that opens the monitor window, so remember where it is */
 
 	x = tb_rect.g_x + TB_GAP;
 
 	for (i = 0; i < TB_NCELLS; i++)
 	{
 		if (tb_cell[i][0] != 0)
-			tb_drawcell(&x, tb_cell[i]);
+		{
+			_WORD x0 = x;
+
+			tb_drawcell(&x, tb_cell[i], (i == 0));
+
+			if (i == 0)
+			{
+				tb_badge.g_x = x0;
+				tb_badge.g_y = tb_rect.g_y + TB_VPAD;
+				tb_badge.g_w = x - TB_GAP - x0;
+				tb_badge.g_h = tb_rect.g_h - 2 * TB_VPAD;
+			}
+		}
 	}
 
 	/* the clock, right-aligned */
@@ -256,7 +296,7 @@ static void tb_drawpart(GRECT *clip)
 	{
 		x = tb_rect.g_x + tb_rect.g_w - TB_GAP -
 			((_WORD) strlen(tb_clock) * tb_cw + 2 * TB_HPAD);
-		tb_drawcell(&x, tb_clock);
+		tb_drawcell(&x, tb_clock, FALSE);
 	}
 
 	xd_clip_off();
@@ -310,17 +350,22 @@ static void tb_redraw(WINDOW *w, GRECT *area)
 
 
 /*
- * Swallow button clicks on the bar (reserved for the pager/monitor later)
+ * Button clicks on the bar: the PiSTorm badge opens the monitor window
  */
 
 static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD kstate)
 {
 	(void) w;
-	(void) x;
-	(void) y;
 	(void) n;
 	(void) bstate;
 	(void) kstate;
+
+	if (tb_badge.g_w > 0 &&
+		x >= tb_badge.g_x && x < tb_badge.g_x + tb_badge.g_w &&
+		y >= tb_badge.g_y && y < tb_badge.g_y + tb_badge.g_h)
+	{
+		mn_open();
+	}
 }
 
 
@@ -600,6 +645,10 @@ void tb_tick(void)
 
 	if (tb_build() || tb_dirty)
 		tb_update(NULL);
+
+	/* refresh the monitor window, if open */
+
+	mn_tick();
 }
 
 
@@ -609,6 +658,8 @@ void tb_tick(void)
 
 void tb_close(void)
 {
+	mn_close();							/* the monitor window too */
+
 	if (tb_window != NULL)
 	{
 		/* note: xw_closedelete() exists in xwindow.h only - its body
