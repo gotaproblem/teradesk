@@ -35,7 +35,7 @@
 #include "font.h"
 #include "screen.h"
 #include "window.h"
-#include "dir.h"						/* dir_font: the user's window font */
+#include "dir.h"						/* mn_font: the user's window font */
 #include "taskbar.h"
 #include "pstask.h"
 
@@ -59,6 +59,8 @@
 #define MN_COLS			44				/* window text columns */
 #define MN_MEMROWS		5				/* memory block + blank line */
 #define MN_DEFROWS		18				/* default total rows at open */
+#define MN_MINPT		9				/* smallest font: 9 points */
+#define MN_KIND			(NAME | CLOSER | MOVER | VSLIDE | UPARROW | DNARROW)
 
 #define RAMVALID_MAGIC	0x1357BD13L
 #define TTRAM_BASE		0x01000000L
@@ -85,6 +87,37 @@ typedef struct
 
 static WINDOW *mn_win = NULL;
 static char mn_title[] = " PiSTorm Monitor ";
+
+static XDFONT mn_font;					/* the window font, min. MN_MINPT points */
+static _WORD mn_req_id = -1;			/* last requested font id/size */
+static _WORD mn_req_pt = -1;
+static _WORD mn_used_ch = 0;			/* metrics the open window was sized for */
+static _WORD mn_used_cw = 0;
+
+
+/*
+ * Select the monitor font: the user's directory-window font (set through
+ * TeraDesk's window-font dialog, saved in the config), clamped to at
+ * least MN_MINPT points so the display stays legible.
+ */
+
+static void mn_setfont(void)
+{
+	_WORD want = dir_font.size;
+
+	if (want < MN_MINPT)
+		want = MN_MINPT;
+
+	if (dir_font.id != mn_req_id || want != mn_req_pt)
+	{
+		mn_req_id = dir_font.id;
+		mn_req_pt = want;
+
+		fnt_setfont(dir_font.id, want, &mn_font);
+		mn_font.colour = dir_font.colour;
+		mn_font.effects = dir_font.effects;
+	}
+}
 
 static long sv_phystop, sv_ramtop, sv_ramvalid;
 static long st_total, st_free, tt_total, tt_free;
@@ -360,7 +393,7 @@ static _WORD mn_visrows(void)
 	xw_getwork(mn_win, &work);
 
 	{
-		_WORD n = (work.g_h / dir_font.ch) - (MN_MEMROWS + 2);
+		_WORD n = (work.g_h / mn_font.ch) - (MN_MEMROWS + 2);
 
 		return (n < 0) ? 0 : n;
 	}
@@ -414,7 +447,7 @@ static void mn_slider(void)
 
 static void mn_text(GRECT *work, _WORD col, _WORD row, char *s)
 {
-	w_transptext(work->g_x + col * dir_font.cw, work->g_y + row * dir_font.ch, s);
+	w_transptext(work->g_x + col * mn_font.cw, work->g_y + row * mn_font.ch, s);
 }
 
 
@@ -422,10 +455,10 @@ static void mn_text(GRECT *work, _WORD col, _WORD row, char *s)
 
 static void mn_bar(GRECT *work, _WORD col, _WORD row, _WORD cols, _WORD p)
 {
-	_WORD x0 = work->g_x + col * dir_font.cw;
-	_WORD y0 = work->g_y + row * dir_font.ch + 2;
-	_WORD w = cols * dir_font.cw;
-	_WORD h = dir_font.ch - 4;
+	_WORD x0 = work->g_x + col * mn_font.cw;
+	_WORD y0 = work->g_y + row * mn_font.ch + 2;
+	_WORD w = cols * mn_font.cw;
+	_WORD h = mn_font.ch - 4;
 	_WORD fill;
 	_WORD f[10];
 	GRECT r;
@@ -520,7 +553,7 @@ static void mn_memrow(GRECT *work, _WORD row, char *label, long freeb, long tota
 
 static void mn_contents(GRECT *work)
 {
-	set_txt_default(&dir_font);
+	set_txt_default(&mn_font);
 
 	mn_memrow(work, 0, s_stram, st_free, st_total);
 
@@ -737,14 +770,30 @@ static WD_FUNC mn_functions = {
 
 /* ---- public entry points ------------------------------------------------ */
 
+/* Outer size for MN_COLS x MN_DEFROWS of the current font, clamped */
+
+static void mn_calcsize(GRECT *size)
+{
+	GRECT wrk;
+
+	wrk.g_x = xd_desk.g_x;
+	wrk.g_y = xd_desk.g_y;
+	wrk.g_w = MN_COLS * mn_font.cw;
+	wrk.g_h = MN_DEFROWS * mn_font.ch;
+
+	wind_calc_grect(WC_BORDER, MN_KIND, &wrk, size);
+
+	if (size->g_w > xd_desk.g_w)
+		size->g_w = xd_desk.g_w;
+	if (size->g_h > xd_desk.g_h)
+		size->g_h = xd_desk.g_h;
+}
+
+
 void mn_open(void)
 {
 	GRECT size;
-	_WORD ww, wh;
 	int error;
-	_WORD kind = NAME | CLOSER | MOVER | VSLIDE | UPARROW | DNARROW;
-
-	GRECT wrk;
 
 	if (mn_win != NULL)
 	{
@@ -752,23 +801,11 @@ void mn_open(void)
 		return;
 	}
 
+	mn_setfont();
 	mn_sample();
 	mn_sig = -1;
 
-	ww = MN_COLS * dir_font.cw;
-	wh = MN_DEFROWS * dir_font.ch;
-
-	wrk.g_x = xd_desk.g_x + 16;
-	wrk.g_y = xd_desk.g_y + 16;
-	wrk.g_w = ww;
-	wrk.g_h = wh;
-
-	wind_calc_grect(WC_BORDER, kind, &wrk, &size);
-
-	if (size.g_w > xd_desk.g_w)
-		size.g_w = xd_desk.g_w;
-	if (size.g_h > xd_desk.g_h)
-		size.g_h = xd_desk.g_h;
+	mn_calcsize(&size);
 
 	/* Home position: bottom-left of the desktop, directly above the
 	 * PiSTorm button on the taskbar it was opened from */
@@ -776,7 +813,10 @@ void mn_open(void)
 	size.g_x = xd_desk.g_x;
 	size.g_y = xd_desk.g_y + xd_desk.g_h - size.g_h;
 
-	mn_win = xw_create(MON_WIND, &mn_functions, kind, &size, sizeof(MON_WINDOW), NULL, &error);
+	mn_used_cw = mn_font.cw;
+	mn_used_ch = mn_font.ch;
+
+	mn_win = xw_create(MON_WIND, &mn_functions, MN_KIND, &size, sizeof(MON_WINDOW), NULL, &error);
 
 	if (mn_win == NULL)
 	{
@@ -795,12 +835,45 @@ void mn_open(void)
 }
 
 
+/*
+ * Resize the open window to the (changed) font, keeping its x position
+ * and its bottom edge where they are
+ */
+
+static void mn_fit(void)
+{
+	GRECT cur, size;
+
+	xw_getsize(mn_win, &cur);
+	mn_calcsize(&size);
+
+	size.g_x = cur.g_x;
+	size.g_y = cur.g_y + cur.g_h - size.g_h;
+
+	if (size.g_y < xd_desk.g_y)
+		size.g_y = xd_desk.g_y;
+
+	mn_used_cw = mn_font.cw;
+	mn_used_ch = mn_font.ch;
+
+	xw_setsize(mn_win, &size);
+	mn_draw(NULL);
+}
+
+
 void mn_tick(void)
 {
 	long sig;
 
 	if (mn_win == NULL)
 		return;
+
+	/* Follow window-font changes; resize the window to match */
+
+	mn_setfont();
+
+	if (mn_font.cw != mn_used_cw || mn_font.ch != mn_used_ch)
+		mn_fit();
 
 	mn_sample();
 

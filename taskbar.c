@@ -648,12 +648,12 @@ static void tb_open(void)
 
 			if (fpu > 0)
 			{
-				strcat(tb_cpustr, "/");
+				/* show the FPU model number as reported by the
+				 * emulator (68881/68882 external, or 68040/68060
+				 * for the on-die FPU of those CPUs) */
 
-				if (fpu == cpu)
-					strcat(tb_cpustr, "FPU");	/* on-chip FPU (040/060) */
-				else
-					ltoa(fpu, tb_cpustr + strlen(tb_cpustr), 10);
+				strcat(tb_cpustr, "/");
+				ltoa(fpu, tb_cpustr + strlen(tb_cpustr), 10);
 			}
 		}
 	}
