@@ -3067,6 +3067,9 @@ _WORD dsk_current(void)
 
 void dsk_switch(_WORD k)
 {
+	nf_debugprintf("[BESPOKE] dsk_switch %d cur %d desktop %s\n",
+				   (int) k, (int) dsk_cur, desktop ? "ok" : "NULL");
+
 	if (k < 0 || k >= DSK_NDESKS || k == dsk_cur || desktop == NULL)
 		return;
 
@@ -3080,6 +3083,8 @@ void dsk_switch(_WORD k)
 	dsk_ctx_adopt(k);
 	bk_init();							/* regenerates by itself on success */
 	regen_desktop(desktop);
+
+	nf_debugprintf("[BESPOKE] switched to desk %d\n", (int) k);
 }
 
 
