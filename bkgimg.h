@@ -32,6 +32,7 @@
  */
 
 void bk_init(void);						/* load the wallpaper (after config load) */
+void bk_drop(void);						/* uninstall + free (before a desk switch) */
 bool bk_install(void);					/* make the desktop root draw it; TRUE = done */
 
 #endif

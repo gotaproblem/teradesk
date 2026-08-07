@@ -1506,6 +1506,14 @@ static void hndlkey(_WORD key,			/* code of the key pressed */
 	if (((uk >= 0x803B) && (uk <= 0x8044)) ||	/* these are function keys codes  */
 		((uk >= 0x8154) && (uk <= 0x815D)))	/* same for shifted function keys */
 	{
+		/* Ctrl+F1..F4: switch to that desktop (Bespoke) */
+
+		if ((kstate & K_CTRL) && uk >= 0x803B && uk <= 0x803A + DSK_NDESKS)
+		{
+			dsk_switch((_WORD) (uk - 0x803B));
+			return;
+		}
+
 		/* Function key ? */
 
 		k &= 0xFF;

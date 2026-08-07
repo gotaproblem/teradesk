@@ -149,6 +149,40 @@ bool bk_install(void)
 
 
 /*
+ * Drop the current wallpaper: restore the desktop root to a plain box
+ * (so a wallpaper-less desk shows its pattern/colour again) and free
+ * the bitmap buffer. Used when switching desktops - call while the OLD
+ * desktop tree is still current, before the pointers are swapped, then
+ * bk_init() again for the new desk's wallpaper.
+ */
+
+void bk_drop(void)
+{
+	if (desktop != NULL)
+	{
+		OBJECT *rt = &desktop[0];
+
+		if ((rt->ob_type & 0x00FF) == G_USERDEF)
+		{
+			XUSERBLK *cur = (XUSERBLK *) rt->ob_spec.userblk;
+
+			rt->ob_type = cur->ob_type;
+			rt->ob_flags = cur->ob_flags;
+			rt->ob_spec = cur->ob_spec;
+		}
+	}
+
+	if (bk_buf != NULL)
+	{
+		Mfree(bk_buf);
+		bk_buf = NULL;
+		bk_w = 0;
+		bk_h = 0;
+	}
+}
+
+
+/*
  * Load the wallpaper named in the configuration through the PSIMG
  * NatFeat. Call after the configuration has been loaded and after the
  * taskbar has reserved its strip, so the desktop root has its final

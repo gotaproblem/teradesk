@@ -42,6 +42,13 @@ extern _WORD sl_noop;
 
 void init_obj(OBJECT *obj, _WORD otype);
 bool dsk_init(void);
+
+/* Bespoke Desktop: multiple switchable desktops */
+
+#define DSK_NDESKS	4
+
+void dsk_switch(_WORD desk);
+_WORD dsk_current(void);
 _WORD dsk_load(XFILE *file);
 void dsk_default(void);
 void dsk_close(void);

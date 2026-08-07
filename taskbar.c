@@ -128,6 +128,7 @@ static _WORD tip_kind = 0;					/* 0 none, 1 uptime, 2 throttle, 3 jit */
 static _WORD tip_minw = 0;					/* min box width in chars (live tips) */
 static GRECT tb_tempr;						/* screen rect of the Temp cell */
 static GRECT tb_jitr;						/* screen rect of the JIT cell */
+static GRECT tb_pager[DSK_NDESKS];			/* the desktop pager buttons */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
 static _WORD tb_cw;							/* actual text cell metrics in use */
 static _WORD tb_ch;
@@ -324,10 +325,31 @@ static void tb_drawpart(GRECT *clip)
 
 			if (i == 0)
 			{
+				_WORD d, cur = dsk_current();
+				char nm[2];
+
 				tb_badge.g_x = x0;
 				tb_badge.g_y = tb_rect.g_y + TB_VPAD;
 				tb_badge.g_w = x - TB_GAP - x0;
 				tb_badge.g_h = tb_rect.g_h - 2 * TB_VPAD;
+
+				/* the desktop pager, right after the badge: one small
+				 * numbered button per desk, the current one pressed */
+
+				nm[1] = 0;
+
+				for (d = 0; d < DSK_NDESKS; d++)
+				{
+					_WORD p0 = x;
+
+					nm[0] = (char) ('1' + d);
+					tb_drawcell(&x, nm, (d != cur), FALSE);
+
+					tb_pager[d].g_x = p0;
+					tb_pager[d].g_y = tb_rect.g_y + TB_VPAD;
+					tb_pager[d].g_w = x - TB_GAP - p0;
+					tb_pager[d].g_h = tb_rect.g_h - 2 * TB_VPAD;
+				}
 			} else if (i == 2)
 			{
 				/* the JIT cell: hovering it pops up the engine figures */
@@ -431,6 +453,25 @@ static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 		y >= tb_badge.g_y && y < tb_badge.g_y + tb_badge.g_h)
 	{
 		mn_open();
+		return;
+	}
+
+	/* the desktop pager */
+
+	{
+		_WORD d;
+
+		for (d = 0; d < DSK_NDESKS; d++)
+		{
+			if (tb_pager[d].g_w > 0 &&
+				x >= tb_pager[d].g_x && x < tb_pager[d].g_x + tb_pager[d].g_w &&
+				y >= tb_pager[d].g_y && y < tb_pager[d].g_y + tb_pager[d].g_h)
+			{
+				dsk_switch(d);
+				tb_dirty = TRUE;		/* repaint the pager promptly */
+				return;
+			}
+		}
 	}
 }
 
@@ -1029,6 +1070,18 @@ static bool tb_build(void)
 	{
 		strcpy(tb_clock, new_clock);
 		changed = TRUE;
+	}
+
+	/* keyboard desk switches repaint the pager on the next tick */
+
+	{
+		static _WORD last_desk = -1;
+
+		if (dsk_current() != last_desk)
+		{
+			last_desk = dsk_current();
+			changed = TRUE;
+		}
 	}
 
 	return changed;

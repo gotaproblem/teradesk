@@ -126,6 +126,34 @@ static bool icd_islink;
 
 bool noicons = FALSE;
 
+/*
+ * Bespoke Desktop: multiple switchable desktops. Each context owns its
+ * own desktop object tree and icon array plus its background and
+ * wallpaper; switching swaps the global desktop/desk_icons pointers and
+ * regenerates - all existing icon code operates on the current pointers
+ * and needs no changes. Context 0 is the classic desktop; the others
+ * are allocated lazily on first use. The visual fields live here even
+ * while a context is unallocated, so the configuration can always load
+ * into them.
+ */
+
+typedef struct
+{
+	OBJECT *tree;						/* desktop tree, or NULL = not yet used */
+	ICON *icons;						/* its icon array */
+	_WORD pattern;						/* background pattern */
+	_WORD colour;						/* background colour */
+	_WORD wallm;						/* wallpaper mode */
+	VLNAME wallp;						/* wallpaper path; empty = none */
+} DSKCTX;
+
+static DSKCTX dsk_ctx[DSK_NDESKS];
+static _WORD dsk_cur = 0;
+static _WORD this_dsk = 0;				/* staging: desk index of one cfg icon */
+
+static bool dsk_ctx_alloc(_WORD k);
+static void dsk_ctx_adopt(_WORD k);
+
 
 static void dsk_diskicons(_WORD *x, _WORD *y, _WORD ic, char *name);
 
@@ -2543,6 +2571,7 @@ static CfgEntry const Icon_table[] = {
 	CFG_S("path", this.name),
 	CFG_D("xpos", this.ic.x),
 	CFG_D("ypos", this.ic.y),
+	CFG_D("desk", this_dsk),
 	CFG_END(),
 	CFG_LAST()
 };
@@ -2561,30 +2590,49 @@ static void icon_cfg(XFILE *file, int lvl, int io, int *error)
 
 	if (io == CFG_SAVE)
 	{
-		ICON *ic = desk_icons;
+		_WORD d;
 
-		for (i = 0; i < max_icons; i++)
+		/* refresh the stash so the current desk's icons save from the
+		 * live pointers like every other context's */
+
+		dsk_ctx[dsk_cur].tree = desktop;
+		dsk_ctx[dsk_cur].icons = desk_icons;
+
+		for (d = 0; d < DSK_NDESKS; d++)
 		{
-			if (ic->item_type != ITM_NOTUSED)
+			ICON *ic = dsk_ctx[d].icons;
+
+			if (ic == NULL)				/* desk never used */
+				continue;
+
+			this_dsk = d;
+
+			for (i = 0; i < max_icons; i++)
 			{
-				this.ic = *ic;
-				this.name[0] = 0;
+				if (ic->item_type != ITM_NOTUSED)
+				{
+					this.ic = *ic;
+					this.name[0] = 0;
 
-				if (ic->item_type == ITM_DRIVE)
-					this.ic.icon_dat.drv -= 'A';
-				else
-					this.ic.icon_dat.drv = 0;
+					if (ic->item_type == ITM_DRIVE)
+						this.ic.icon_dat.drv -= 'A';
+					else
+						this.ic.icon_dat.drv = 0;
 
-				if (ic->tgt_type == ic->item_type)
-					this.ic.tgt_type = 0;	/* for smaller config files */
+					if (ic->tgt_type == ic->item_type)
+						this.ic.tgt_type = 0;	/* for smaller config files */
 
-				if (isfilenet(ic->item_type))
-					strcpy(this.name, ic->icon_dat.name);
+					if (isfilenet(ic->item_type))
+						strcpy(this.name, ic->icon_dat.name);
 
-				*error = CfgSave(file, Icon_table, lvl, CFGEMP);
+					*error = CfgSave(file, Icon_table, lvl, CFGEMP);
+				}
+
+				ic++;
+
+				if (*error != 0)
+					break;
 			}
-
-			ic++;
 
 			if (*error != 0)
 				break;
@@ -2592,6 +2640,7 @@ static void icon_cfg(XFILE *file, int lvl, int io, int *error)
 	} else
 	{
 		memclr(&this, sizeof(this));
+		this_dsk = 0;					/* old configs have no desk key */
 
 		*error = CfgLoad(file, Icon_table, (_WORD) sizeof(VLNAME), lvl);
 
@@ -2627,6 +2676,15 @@ static void icon_cfg(XFILE *file, int lvl, int io, int *error)
 					if (this.ic.tgt_type == 0)	/* for smaller config files */
 						this.ic.tgt_type = it;
 
+					/* route the icon onto its desktop: add_icon works on
+					 * the current pointers, so adopt that context first.
+					 * If it cannot be allocated the icon lands on the
+					 * current desk rather than being lost. */
+
+					if (this_dsk >= 0 && this_dsk < DSK_NDESKS &&
+						this_dsk != dsk_cur && dsk_ctx_alloc(this_dsk))
+						dsk_ctx_adopt(this_dsk);
+
 					*error = add_icon
 						(it,
 						 (ITMTYPE) this.ic.tgt_type,
@@ -2646,6 +2704,33 @@ static void icon_cfg(XFILE *file, int lvl, int io, int *error)
  * Configuration table for desktop icons
  */
 
+/*
+ * Clear the icons of ALL desktop contexts (the config load/reset
+ * handler). Inactive contexts are cleared through a pointer-level adopt
+ * so rem_all_icons() frees their name strings too; they stay allocated,
+ * just empty.
+ */
+
+static void rem_all_desks(void)
+{
+	_WORD d, cur = dsk_cur;
+
+	for (d = 0; d < DSK_NDESKS; d++)
+	{
+		if (dsk_ctx[d].tree == NULL && d != cur)
+			continue;
+
+		if (d != dsk_cur)
+			dsk_ctx_adopt(d);
+
+		rem_all_icons();
+	}
+
+	if (dsk_cur != cur)
+		dsk_ctx_adopt(cur);
+}
+
+
 static CfgEntry const DskIcons_table[] = {
 	CFG_HDR("deskicons"),
 	CFG_BEG(),
@@ -2653,6 +2738,21 @@ static CfgEntry const DskIcons_table[] = {
 	CFG_D("yoff", icn_yoff),
 	CFG_D("iconw", iconw),
 	CFG_D("iconh", iconh),
+	/* backgrounds and wallpapers of desks 1-3 (desk 0 lives in the
+	 * classic options); stored in the context structs, which exist
+	 * even while a desk is unallocated */
+	CFG_D("dpa1", dsk_ctx[1].pattern),
+	CFG_D("dco1", dsk_ctx[1].colour),
+	CFG_D("dwm1", dsk_ctx[1].wallm),
+	CFG_S("dwa1", dsk_ctx[1].wallp),
+	CFG_D("dpa2", dsk_ctx[2].pattern),
+	CFG_D("dco2", dsk_ctx[2].colour),
+	CFG_D("dwm2", dsk_ctx[2].wallm),
+	CFG_S("dwa2", dsk_ctx[2].wallp),
+	CFG_D("dpa3", dsk_ctx[3].pattern),
+	CFG_D("dco3", dsk_ctx[3].colour),
+	CFG_D("dwm3", dsk_ctx[3].wallm),
+	CFG_S("dwa3", dsk_ctx[3].wallp),
 	CFG_NEST("icon", icon_cfg), /* Repeating group */
 	CFG_ENDG(),
 	CFG_LAST()
@@ -2665,10 +2765,17 @@ static CfgEntry const DskIcons_table[] = {
 
 void dsk_config(XFILE *file, int lvl, int io, int *error)
 {
-	*error = handle_cfg(file, DskIcons_table, lvl, CFGEMP, io, rem_all_icons, dsk_default);
+	*error = handle_cfg(file, DskIcons_table, lvl, CFGEMP, io, rem_all_desks, dsk_default);
 
 	if (io == CFG_LOAD && *error >= 0)
+	{
+		/* icon routing may have left another desk adopted */
+
+		if (dsk_cur != 0)
+			dsk_ctx_adopt(0);
+
 		regen_desktop(desktop);
+	}
 }
 
 
@@ -2838,6 +2945,20 @@ bool dsk_init(void)
 			for (i = 0; i < max_icons; i++)
 				desk_icons[i].item_type = ITM_NOTUSED;
 
+			/* register this as desktop context 0; the other desktops
+			 * allocate lazily on first use, with these visual defaults */
+
+			dsk_ctx[0].tree = desktop;
+			dsk_ctx[0].icons = desk_icons;
+
+			for (i = 0; i < DSK_NDESKS; i++)
+			{
+				dsk_ctx[i].pattern = dsk_defaultpatt();
+				dsk_ctx[i].colour = G_GREEN;
+				dsk_ctx[i].wallm = 0;
+				dsk_ctx[i].wallp[0] = 0;
+			}
+
 #ifdef MEMDEBUG
 			atexit(rem_all_icons);
 #endif
@@ -2853,6 +2974,112 @@ bool dsk_init(void)
 	}
 
 	return FALSE;
+}
+
+
+/*
+ * Allocate and initialise the tree + icon array for desktop context k,
+ * exactly as dsk_init() does for the first desktop. Returns FALSE on
+ * ENOMEM - the caller then simply refuses the operation.
+ */
+
+static bool dsk_ctx_alloc(_WORD k)
+{
+	DSKCTX *c = &dsk_ctx[k];
+	bfobspec *obsp0;
+	_WORD i;
+
+	if (c->tree != NULL)
+		return TRUE;
+
+	c->tree = malloc_chk((long) (max_icons + 1) * sizeof(OBJECT));
+	c->icons = malloc_chk((size_t) max_icons * sizeof(ICON));
+
+	if (c->tree == NULL || c->icons == NULL)
+	{
+		free(c->tree);
+		free(c->icons);
+		c->tree = NULL;
+		c->icons = NULL;
+		return FALSE;
+	}
+
+	init_obj(&c->tree[0], G_BOX);
+
+	obsp0 = &c->tree[0].ob_spec.obspec;
+	obsp0->framesize = 0;
+	obsp0->fillpattern = c->pattern;
+	obsp0->interiorcol = c->colour;
+
+	c->tree[0].ob_x = xd_desk.g_x;
+	c->tree[0].ob_y = xd_desk.g_y;
+	c->tree[0].ob_width = xd_desk.g_w;
+	c->tree[0].ob_height = xd_desk.g_h;
+
+	for (i = 0; i < max_icons; i++)
+		c->icons[i].item_type = ITM_NOTUSED;
+
+	return TRUE;
+}
+
+
+/*
+ * Pointer-level context change: stash the current globals into the
+ * current context, adopt context k. No visuals, no redraw - used by the
+ * configuration code to route icons, and by dsk_switch() below. All
+ * existing icon code operates on the desktop/desk_icons globals, so
+ * after this it transparently works on desk k.
+ */
+
+static void dsk_ctx_adopt(_WORD k)
+{
+	DSKCTX *c = &dsk_ctx[dsk_cur];
+
+	c->tree = desktop;
+	c->icons = desk_icons;
+	c->pattern = options.dsk_pattern;
+	c->colour = options.dsk_colour;
+	c->wallm = options.wallm;
+	strcpy(c->wallp, options.wallp);
+
+	c = &dsk_ctx[k];
+	desktop = c->tree;
+	desk_icons = c->icons;
+	options.dsk_pattern = c->pattern;
+	options.dsk_colour = c->colour;
+	options.wallm = c->wallm;
+	strcpy(options.wallp, c->wallp);
+	dsk_cur = k;
+}
+
+
+_WORD dsk_current(void)
+{
+	return dsk_cur;
+}
+
+
+/*
+ * The full desktop switch: drop the old desk's wallpaper (while its
+ * tree is still current), swap contexts, load the new desk's wallpaper,
+ * regenerate. Refused quietly if the target cannot be allocated.
+ */
+
+void dsk_switch(_WORD k)
+{
+	if (k < 0 || k >= DSK_NDESKS || k == dsk_cur || desktop == NULL)
+		return;
+
+	if (!dsk_ctx_alloc(k))
+	{
+		xform_error(ENOMEM);
+		return;
+	}
+
+	bk_drop();
+	dsk_ctx_adopt(k);
+	bk_init();							/* regenerates by itself on success */
+	regen_desktop(desktop);
 }
 
 
