@@ -110,6 +110,7 @@ static GRECT tb_clockr;						/* screen rect of the clock cell */
 #define TB_HOV_BADGE	0
 #define TB_HOV_CLOCK	1
 #define TB_HOV_TEMP		2
+#define TB_HOV_JIT		3
 
 static _WORD tb_hovin = 0;					/* 0 = mouse outside bar, 1 = inside */
 static GRECT tb_hovrect;					/* rect currently watched by MU_M1 */
@@ -123,9 +124,10 @@ static WINDOW *tip_win = NULL;				/* the tooltip window */
 
 static char tip_lines[TIP_MAXLINES][TIP_MAXLEN];	/* tooltip text lines */
 static _WORD tip_nlines = 0;
-static _WORD tip_kind = 0;					/* 0 none, 1 uptime, 2 throttle */
+static _WORD tip_kind = 0;					/* 0 none, 1 uptime, 2 throttle, 3 jit */
 static _WORD tip_minw = 0;					/* min box width in chars (live tips) */
 static GRECT tb_tempr;						/* screen rect of the Temp cell */
+static GRECT tb_jitr;						/* screen rect of the JIT cell */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
 static _WORD tb_cw;							/* actual text cell metrics in use */
 static _WORD tb_ch;
@@ -326,6 +328,14 @@ static void tb_drawpart(GRECT *clip)
 				tb_badge.g_y = tb_rect.g_y + TB_VPAD;
 				tb_badge.g_w = x - TB_GAP - x0;
 				tb_badge.g_h = tb_rect.g_h - 2 * TB_VPAD;
+			} else if (i == 2)
+			{
+				/* the JIT cell: hovering it pops up the engine figures */
+
+				tb_jitr.g_x = x0;
+				tb_jitr.g_y = tb_rect.g_y + TB_VPAD;
+				tb_jitr.g_w = x - TB_GAP - x0;
+				tb_jitr.g_h = tb_rect.g_h - 2 * TB_VPAD;
 			} else if (i == 3)
 			{
 				/* the Temp cell: hovering it pops up the throttle events */
@@ -703,6 +713,84 @@ static void tip_throttle(void)
 	tip_kind = 2;
 	tip_minw = 26;						/* "Under-voltage : since boot" */
 	tip_show(&tb_tempr);
+}
+
+
+/*
+ * The JIT engine tooltip over the JIT cell: effective speed against the
+ * 8 MHz ST reference, cycle-weighted hit rate, true (STOP) idle share,
+ * and cache fill. Any figure an older emulator cannot supply is simply
+ * omitted.
+ */
+
+static void tip_jit_lines(void)
+{
+	long khz = tb_ps(71L);				/* PS_JIT_EFF_KHZ */
+	long hit = tb_ps(72L);				/* PS_JIT_HITRATE_X10 */
+	long idle = tb_ps(73L);				/* PS_JIT_IDLE_X10 */
+	long used = tb_ps(PS_STAT_CACHE_USED);
+	long total = tb_ps(PS_STAT_CACHE_TOTAL);
+	char *p;
+
+	strcpy(tip_lines[0], "PiSTorm JIT");
+	tip_nlines = 1;
+
+	if (khz > 0)
+	{
+		p = tb_app(tip_lines[tip_nlines], "Speed   : ");
+		ltoa(khz / 1000L, p, 10);
+		p += strlen(p);
+		p = tb_app(p, " MHz (");
+		ltoa((khz + 4000L) / 8000L, p, 10);
+		p += strlen(p);
+		p = tb_app(p, "x ST)");
+		tip_nlines++;
+	}
+
+	if (hit >= 0 && hit <= 1000L)
+	{
+		p = tb_app(tip_lines[tip_nlines], "JIT hit : ");
+		ltoa(hit / 10L, p, 10);
+		p += strlen(p);
+		*p++ = '.';
+		*p++ = (char) ('0' + (_WORD) (hit % 10L));
+		*p++ = '%';
+		*p = 0;
+		tip_nlines++;
+	}
+
+	if (idle >= 0 && idle <= 1000L)
+	{
+		p = tb_app(tip_lines[tip_nlines], "Idle    : ");
+		ltoa(idle / 10L, p, 10);
+		p += strlen(p);
+		*p++ = '.';
+		*p++ = (char) ('0' + (_WORD) (idle % 10L));
+		*p++ = '%';
+		*p = 0;
+		tip_nlines++;
+	}
+
+	if (total > 0)
+	{
+		p = tb_app(tip_lines[tip_nlines], "Cache   : ");
+		ltoa((used * 100L) / total, p, 10);
+		p += strlen(p);
+		p = tb_app(p, "% used");
+		tip_nlines++;
+	}
+}
+
+
+static void tip_jit(void)
+{
+	if (tip_win != NULL || tb_psid == 0)
+		return;
+
+	tip_jit_lines();
+	tip_kind = 3;
+	tip_minw = 23;						/* "Speed   : 1234 MHz (154x ST)" */
+	tip_show(&tb_jitr);
 }
 
 
@@ -1148,6 +1236,12 @@ void tb_hover(_WORD x, _WORD y)
 		{
 			tgt = TB_HOV_TEMP;
 			tb_hovrect = tb_tempr;
+		} else if (tb_jitr.g_w > 0 &&
+			x >= tb_jitr.g_x && x < tb_jitr.g_x + tb_jitr.g_w &&
+			y >= tb_jitr.g_y && y < tb_jitr.g_y + tb_jitr.g_h)
+		{
+			tgt = TB_HOV_JIT;
+			tb_hovrect = tb_jitr;
 		} else
 		{
 			/* dead space: watch a small box around the pointer */
@@ -1213,6 +1307,8 @@ void tb_tick(void)
 				tip_uptime();
 			else if (tb_hovtgt == TB_HOV_TEMP)
 				tip_throttle();
+			else if (tb_hovtgt == TB_HOV_JIT)
+				tip_jit();
 		}
 	}
 
@@ -1232,8 +1328,10 @@ void tb_tick(void)
 
 		if (tip_kind == 1)
 			tip_uptime_lines();
-		else
+		else if (tip_kind == 2)
 			tip_throttle_lines();
+		else
+			tip_jit_lines();
 
 		diff = (tip_nlines != n);
 
