@@ -1498,6 +1498,22 @@ static void hndlkey(_WORD key,			/* code of the key pressed */
 	if (kstate & K_CTRL)
 		nf_debugprintf("[BESPOKE] ctrl key 0x%x kstate 0x%x\n", (int) uk, (int) kstate);
 
+	/* Ctrl+F1..F4: switch desktops (Bespoke). Match on the raw scan code
+	 * plus the real keyboard state, up front - the xdialog layer can fold
+	 * modifier flags into the key value, so a Ctrl'd F-key is not
+	 * reliably equal to the bare 0x803B..0x803E codes. */
+
+	if ((kstate & (K_CTRL | K_ALT)) == K_CTRL && (key & XD_SCANCODE))
+	{
+		_WORD sc = key & 0xFF;
+
+		if (sc >= 0x3B && sc < 0x3B + DSK_NDESKS)
+		{
+			dsk_switch((_WORD) (sc - 0x3B));
+			return;
+		}
+	}
+
 	/* [Help] key ? */
 
 	if (uk == HELP || uk == SHIFT_HELP)
@@ -1511,14 +1527,6 @@ static void hndlkey(_WORD key,			/* code of the key pressed */
 	if (((uk >= 0x803B) && (uk <= 0x8044)) ||	/* these are function keys codes  */
 		((uk >= 0x8154) && (uk <= 0x815D)))	/* same for shifted function keys */
 	{
-		/* Ctrl+F1..F4: switch to that desktop (Bespoke) */
-
-		if ((kstate & K_CTRL) && uk >= 0x803B && uk <= 0x803A + DSK_NDESKS)
-		{
-			dsk_switch((_WORD) (uk - 0x803B));
-			return;
-		}
-
 		/* Function key ? */
 
 		k &= 0xFF;
