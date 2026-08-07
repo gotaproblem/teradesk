@@ -123,6 +123,8 @@ static WINDOW *tip_win = NULL;				/* the tooltip window */
 
 static char tip_lines[TIP_MAXLINES][TIP_MAXLEN];	/* tooltip text lines */
 static _WORD tip_nlines = 0;
+static _WORD tip_kind = 0;					/* 0 none, 1 uptime, 2 throttle */
+static _WORD tip_minw = 0;					/* min box width in chars (live tips) */
 static GRECT tb_tempr;						/* screen rect of the Temp cell */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
 static _WORD tb_cw;							/* actual text cell metrics in use */
@@ -535,6 +537,7 @@ static void tip_close(void)
 		xw_close(tip_win);
 		xw_delete(tip_win);
 		tip_win = NULL;
+		tip_kind = 0;
 	}
 }
 
@@ -563,6 +566,9 @@ static void tip_show(GRECT *anchor)
 			maxlen = len;
 	}
 
+	if (maxlen < tip_minw)				/* live tips: room for the longest */
+		maxlen = tip_minw;				/* state any line can grow into */
+
 	size.g_w = (maxlen + 2) * tb_cw;
 	size.g_h = tip_nlines * (tb_ch + 2) + tb_ch + 2;
 	size.g_x = anchor->g_x + anchor->g_w - size.g_w;
@@ -582,14 +588,12 @@ static void tip_show(GRECT *anchor)
  * The uptime tooltip over the clock cell: "Pi up 3d 04:12"
  */
 
-static void tip_uptime(void)
+static void tip_uptime_lines(void)
 {
 	long up;
 	char *p;
 
-	if (tip_win != NULL || tb_psid == 0)
-		return;
-
+	tip_nlines = 0;
 	up = tb_ps(67L);					/* PS_HOST_UPTIME_S */
 
 	if (up < 0)
@@ -611,6 +615,21 @@ static void tip_uptime(void)
 	*p = 0;
 
 	tip_nlines = 1;
+}
+
+
+static void tip_uptime(void)
+{
+	if (tip_win != NULL || tb_psid == 0)
+		return;
+
+	tip_uptime_lines();
+
+	if (tip_nlines == 0)
+		return;
+
+	tip_kind = 1;
+	tip_minw = 0;
 	tip_show(&tb_clockr);
 }
 
@@ -639,14 +658,9 @@ static void tip_evline(char *dst, const char *name, long thr, _WORD bit)
  * firmware reports, happening now and seen since boot.
  */
 
-static void tip_throttle(void)
+static void tip_throttle_lines(void)
 {
-	long thr;
-
-	if (tip_win != NULL || tb_psid == 0)
-		return;
-
-	thr = tb_ps(PS_HOST_THROTTLED);
+	long thr = tb_ps(PS_HOST_THROTTLED);
 
 	if (thr < 0)
 	{
@@ -677,7 +691,17 @@ static void tip_throttle(void)
 			tip_nlines++;
 		}
 	}
+}
 
+
+static void tip_throttle(void)
+{
+	if (tip_win != NULL || tb_psid == 0)
+		return;
+
+	tip_throttle_lines();
+	tip_kind = 2;
+	tip_minw = 26;						/* "Under-voltage : since boot" */
 	tip_show(&tb_tempr);
 }
 
@@ -1190,6 +1214,35 @@ void tb_tick(void)
 			else if (tb_hovtgt == TB_HOV_TEMP)
 				tip_throttle();
 		}
+	}
+
+	/* Live tooltip: while one is open, rebuild its lines every tick and
+	 * repaint only when something actually changed - the throttle tip's
+	 * ARM clock and ACTIVE flags move in real time, the uptime tip once
+	 * a minute. The box keeps its opening size (tip_minw reserves room
+	 * for the longest state a line can grow into). */
+
+	if (tip_win != NULL && tip_kind != 0)
+	{
+		char old[TIP_MAXLINES][TIP_MAXLEN];
+		_WORD n = tip_nlines, li;
+		bool diff;
+
+		memcpy(old, tip_lines, sizeof(old));
+
+		if (tip_kind == 1)
+			tip_uptime_lines();
+		else
+			tip_throttle_lines();
+
+		diff = (tip_nlines != n);
+
+		for (li = 0; !diff && li < tip_nlines; li++)
+			if (strcmp(old[li], tip_lines[li]) != 0)
+				diff = TRUE;
+
+		if (diff)
+			tip_draw(tip_win, NULL);
 	}
 
 	/* hourly clock re-sync against drift (7200 ticks of 500 ms) */
