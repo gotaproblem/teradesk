@@ -62,6 +62,12 @@
 #define MN_MINPT		9				/* smallest font: 9 points */
 #define MN_KIND			(NAME | CLOSER | MOVER | VSLIDE | UPARROW | DNARROW)
 
+/* Margins between the window frame and the content, so text never
+ * touches the edges; scale with the font like everything else here */
+
+#define MN_HPAD			(mn_font.cw)
+#define MN_VPAD			(mn_font.ch / 2)
+
 #define RAMVALID_MAGIC	0x1357BD13L
 #define TTRAM_BASE		0x01000000L
 #define GEM_EINVFN		-32L
@@ -393,7 +399,7 @@ static _WORD mn_visrows(void)
 	xw_getwork(mn_win, &work);
 
 	{
-		_WORD n = (work.g_h / mn_font.ch) - (MN_MEMROWS + 2);
+		_WORD n = ((work.g_h - 2 * MN_VPAD) / mn_font.ch) - (MN_MEMROWS + 2);
 
 		return (n < 0) ? 0 : n;
 	}
@@ -447,7 +453,8 @@ static void mn_slider(void)
 
 static void mn_text(GRECT *work, _WORD col, _WORD row, char *s)
 {
-	w_transptext(work->g_x + col * mn_font.cw, work->g_y + row * mn_font.ch, s);
+	w_transptext(work->g_x + MN_HPAD + col * mn_font.cw,
+				 work->g_y + MN_VPAD + row * mn_font.ch, s);
 }
 
 
@@ -455,8 +462,8 @@ static void mn_text(GRECT *work, _WORD col, _WORD row, char *s)
 
 static void mn_bar(GRECT *work, _WORD col, _WORD row, _WORD cols, _WORD p)
 {
-	_WORD x0 = work->g_x + col * mn_font.cw;
-	_WORD y0 = work->g_y + row * mn_font.ch + 2;
+	_WORD x0 = work->g_x + MN_HPAD + col * mn_font.cw;
+	_WORD y0 = work->g_y + MN_VPAD + row * mn_font.ch + 2;
 	_WORD w = cols * mn_font.cw;
 	_WORD h = mn_font.ch - 4;
 	_WORD fill;
@@ -778,8 +785,8 @@ static void mn_calcsize(GRECT *size)
 
 	wrk.g_x = xd_desk.g_x;
 	wrk.g_y = xd_desk.g_y;
-	wrk.g_w = MN_COLS * mn_font.cw;
-	wrk.g_h = MN_DEFROWS * mn_font.ch;
+	wrk.g_w = MN_COLS * mn_font.cw + 2 * MN_HPAD;
+	wrk.g_h = MN_DEFROWS * mn_font.ch + 2 * MN_VPAD;
 
 	wind_calc_grect(WC_BORDER, MN_KIND, &wrk, size);
 

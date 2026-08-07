@@ -109,14 +109,21 @@ static GRECT tb_clockr;						/* screen rect of the clock cell */
 #define TB_HOV_NONE		-1
 #define TB_HOV_BADGE	0
 #define TB_HOV_CLOCK	1
+#define TB_HOV_TEMP		2
 
 static _WORD tb_hovin = 0;					/* 0 = mouse outside bar, 1 = inside */
 static GRECT tb_hovrect;					/* rect currently watched by MU_M1 */
 static _WORD tb_hovtgt = TB_HOV_NONE;		/* what the mouse is hovering over */
 static _WORD tb_dwell = 0;					/* ticks spent hovering the target */
 
-static WINDOW *tip_win = NULL;				/* the uptime tooltip window */
-static char tip_text[32];
+static WINDOW *tip_win = NULL;				/* the tooltip window */
+
+#define TIP_MAXLINES	6
+#define TIP_MAXLEN		36
+
+static char tip_lines[TIP_MAXLINES][TIP_MAXLEN];	/* tooltip text lines */
+static _WORD tip_nlines = 0;
+static GRECT tb_tempr;						/* screen rect of the Temp cell */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
 static _WORD tb_cw;							/* actual text cell metrics in use */
 static _WORD tb_ch;
@@ -317,6 +324,14 @@ static void tb_drawpart(GRECT *clip)
 				tb_badge.g_y = tb_rect.g_y + TB_VPAD;
 				tb_badge.g_w = x - TB_GAP - x0;
 				tb_badge.g_h = tb_rect.g_h - 2 * TB_VPAD;
+			} else if (i == 3)
+			{
+				/* the Temp cell: hovering it pops up the throttle events */
+
+				tb_tempr.g_x = x0;
+				tb_tempr.g_y = tb_rect.g_y + TB_VPAD;
+				tb_tempr.g_w = x - TB_GAP - x0;
+				tb_tempr.g_h = tb_rect.g_h - 2 * TB_VPAD;
 			}
 		}
 	}
@@ -465,7 +480,19 @@ static void tip_draw(WINDOW *w, GRECT *area)
 
 			tb_setfont();
 			vst_color(vdi_handle, G_BLACK);
-			w_transptext(work.g_x + TB_HPAD, work.g_y + (work.g_h - tb_ch) / 2, tip_text);
+
+			/* one character cell of margin left/right, half a cell above
+			 * and below, and a little leading between lines - the box is
+			 * always visibly larger than the text */
+
+			{
+				_WORD li;
+
+				for (li = 0; li < tip_nlines; li++)
+					w_transptext(work.g_x + tb_cw,
+								 work.g_y + tb_ch / 2 + 2 + li * (tb_ch + 2),
+								 tip_lines[li]);
+			}
 
 			xd_clip_off();
 		}
@@ -513,15 +540,52 @@ static void tip_close(void)
 
 
 /*
- * Open the uptime tooltip above the clock cell
+ * Open the tooltip window sized to tip_lines[], its right edge aligned
+ * with the anchor cell, just above the bar. Padding matches tip_draw:
+ * a full character cell horizontally, half a cell vertically, plus a
+ * little leading between lines - the box is larger than the text.
  */
 
-static void tip_open(void)
+static void tip_show(GRECT *anchor)
 {
 	GRECT size;
+	_WORD li, len, maxlen = 0;
+	int error;
+
+	if (tip_win != NULL || tip_nlines == 0)
+		return;
+
+	for (li = 0; li < tip_nlines; li++)
+	{
+		len = (_WORD) strlen(tip_lines[li]);
+
+		if (len > maxlen)
+			maxlen = len;
+	}
+
+	size.g_w = (maxlen + 2) * tb_cw;
+	size.g_h = tip_nlines * (tb_ch + 2) + tb_ch + 2;
+	size.g_x = anchor->g_x + anchor->g_w - size.g_w;
+	size.g_y = tb_rect.g_y - size.g_h - 2;
+
+	if (size.g_x < tb_rect.g_x)
+		size.g_x = tb_rect.g_x;
+
+	tip_win = xw_create(TIP_WIND, &tip_functions, 0, &size, sizeof(TIP_WINDOW), NULL, &error);
+
+	if (tip_win != NULL)
+		xw_open(tip_win, &size);
+}
+
+
+/*
+ * The uptime tooltip over the clock cell: "Pi up 3d 04:12"
+ */
+
+static void tip_uptime(void)
+{
 	long up;
 	char *p;
-	int error;
 
 	if (tip_win != NULL || tb_psid == 0)
 		return;
@@ -531,9 +595,7 @@ static void tip_open(void)
 	if (up < 0)
 		return;
 
-	/* "Pi up 3d 04:12" */
-
-	p = tb_app(tip_text, "Pi up ");
+	p = tb_app(tip_lines[0], "Pi up ");
 
 	if (up >= 86400L)
 	{
@@ -548,15 +610,59 @@ static void tip_open(void)
 	p = tb_two(p, (_WORD) ((up % 3600L) / 60L));
 	*p = 0;
 
-	size.g_w = (_WORD) strlen(tip_text) * tb_cw + 2 * TB_HPAD;
-	size.g_h = tb_ch + 6;
-	size.g_x = tb_clockr.g_x + tb_clockr.g_w - size.g_w;
-	size.g_y = tb_rect.g_y - size.g_h - 2;
+	tip_nlines = 1;
+	tip_show(&tb_clockr);
+}
 
-	tip_win = xw_create(TIP_WIND, &tip_functions, 0, &size, sizeof(TIP_WINDOW), NULL, &error);
 
-	if (tip_win != NULL)
-		xw_open(tip_win, &size);
+/*
+ * One line of the throttle tooltip: event name, then its state from the
+ * firmware get_throttled register - "ACTIVE" (low bit), "since boot"
+ * (the same bit shifted up 16), or "-" for never.
+ */
+
+static void tip_evline(char *dst, const char *name, long thr, _WORD bit)
+{
+	char *p = tb_app(dst, name);
+
+	if (thr & (1L << bit))
+		strcpy(p, "ACTIVE");
+	else if (thr & (1L << (bit + 16)))
+		strcpy(p, "since boot");
+	else
+		strcpy(p, "-");
+}
+
+
+/*
+ * The throttle-events tooltip over the Temp cell: everything the Pi
+ * firmware reports, happening now and seen since boot.
+ */
+
+static void tip_throttle(void)
+{
+	long thr;
+
+	if (tip_win != NULL || tb_psid == 0)
+		return;
+
+	thr = tb_ps(PS_HOST_THROTTLED);
+
+	if (thr < 0)
+	{
+		strcpy(tip_lines[0], "No throttle data");
+		tip_nlines = 1;
+	} else
+	{
+		strcpy(tip_lines[0], "Pi throttle events");
+		tip_evline(tip_lines[1], "Under-voltage : ", thr, 0);
+		tip_evline(tip_lines[2], "Freq capped   : ", thr, 1);
+		tip_evline(tip_lines[3], "Throttled     : ", thr, 2);
+		tip_evline(tip_lines[4], "Overtemp      : ", thr, 3);
+		tip_nlines = 5;
+	}
+
+	tip_show(&tb_tempr);
 }
 
 
@@ -996,6 +1102,12 @@ void tb_hover(_WORD x, _WORD y)
 		{
 			tgt = TB_HOV_CLOCK;
 			tb_hovrect = tb_clockr;
+		} else if (tb_tempr.g_w > 0 &&
+			x >= tb_tempr.g_x && x < tb_tempr.g_x + tb_tempr.g_w &&
+			y >= tb_tempr.g_y && y < tb_tempr.g_y + tb_tempr.g_h)
+		{
+			tgt = TB_HOV_TEMP;
+			tb_hovrect = tb_tempr;
 		} else
 		{
 			/* dead space: watch a small box around the pointer */
@@ -1015,9 +1127,7 @@ void tb_hover(_WORD x, _WORD y)
 	{
 		tb_hovtgt = tgt;
 		tb_dwell = 0;
-
-		if (tgt != TB_HOV_CLOCK)
-			tip_close();				/* moved off the clock */
+		tip_close();					/* tooltip belongs to the old target */
 	}
 }
 
@@ -1044,7 +1154,9 @@ void tb_tick(void)
 			if (tb_hovtgt == TB_HOV_BADGE)
 				mn_open();
 			else if (tb_hovtgt == TB_HOV_CLOCK)
-				tip_open();
+				tip_uptime();
+			else if (tb_hovtgt == TB_HOV_TEMP)
+				tip_throttle();
 		}
 	}
 
