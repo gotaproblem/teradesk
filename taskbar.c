@@ -662,6 +662,22 @@ static void tip_throttle(void)
 		tip_nlines = 5;
 	}
 
+	/* the live ARM core clock: full speed reads 1500 MHz; anything
+	 * lower while under load means the firmware is scaling right now */
+
+	{
+		long khz = tb_ps(65L);			/* PS_HOST_ARM_FREQ_KHZ */
+
+		if (khz > 0)
+		{
+			char *p = tb_app(tip_lines[tip_nlines], "ARM clock     : ");
+
+			ltoa(khz / 1000L, p, 10);
+			strcat(p, " MHz");
+			tip_nlines++;
+		}
+	}
+
 	tip_show(&tb_tempr);
 }
 
