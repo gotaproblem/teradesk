@@ -1144,6 +1144,22 @@ void tb_tick(void)
 	if (tb_window == NULL)
 		return;
 
+	/* Poll the pointer ourselves every tick: MU_M1 mouse-rectangle
+	 * events are only delivered to the application holding the AES
+	 * focus, so with another app on top (the video player, typically)
+	 * the hover machinery would never hear the mouse at all - popups
+	 * dead until TeraDesk is clicked. graf_mkstate() sees the pointer
+	 * regardless of focus, and tick granularity is plenty: the dwell
+	 * below already needs two ticks. MU_M1 stays armed as well, for
+	 * instant response while TeraDesk is the focused app. */
+
+	{
+		_WORD mx, my, dummy;
+
+		graf_mkstate(&mx, &my, &dummy, &dummy);
+		tb_hover(mx, my);
+	}
+
 	/* Hover dwell: after one tick over a target, act - unless a modal
 	 * dialog is open */
 
