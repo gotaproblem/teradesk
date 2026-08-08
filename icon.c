@@ -3241,13 +3241,23 @@ void dsk_switch(_WORD k)
 	if (fresh)
 		dsk_ctx_populate();
 
-	bk_init();							/* regenerates by itself on success */
-	regen_desktop(desktop);
+	/* Hide the leavers FIRST - windows and whole applications - so that
+	 * the desktop repaint below paints its background over whatever they
+	 * left behind. Order matters: a program that draws outside its
+	 * tracked window (a raw-VDI benchmark like GEMBench, a busy TOS
+	 * console) leaves residue the AES will not sweep on its own, so the
+	 * repaint has to come AFTER the hide, not before (the original bug -
+	 * regen ran first and the residue survived). */
+
 	xw_desk_show(k);					/* per-desk windows follow the switch */
 
 #if _MINT_
 	dsk_app_show(k);					/* per-desk applications too */
 #endif
+
+	bk_init();							/* regenerates by itself on success */
+	regen_desktop(desktop);
+	redraw_desk(&xd_desk);				/* full sweep over any orphaned pixels */
 
 	nf_debugprintf("[BESPOKE] switched to desk %d\n", (int) k);
 }
