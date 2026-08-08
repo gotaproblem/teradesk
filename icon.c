@@ -3243,9 +3243,6 @@ void dsk_switch(_WORD k)
 {
 	bool fresh;
 
-	nf_debugprintf("[BESPOKE] dsk_switch %d cur %d desktop %s\n",
-				   (int) k, (int) dsk_cur, desktop ? "ok" : "NULL");
-
 	if (k < 0 || k >= DSK_NDESKS || desktop == NULL)
 		return;
 
@@ -3292,8 +3289,6 @@ void dsk_switch(_WORD k)
 	dsk_sweep();						/* ...then every window repaints too,
 										 * sweeping any raw-VDI residue off
 										 * windows and taskbar alike */
-
-	nf_debugprintf("[BESPOKE] switched to desk %d\n", (int) k);
 }
 
 

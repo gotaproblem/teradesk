@@ -1493,11 +1493,6 @@ static void hndlkey(_WORD key,			/* code of the key pressed */
 	fprintf(logfile, "\n hndlkey 0x%x 0x%x", key, kstate);
 #endif
 
-	/* BESPOKE diagnostics: what does a Ctrl'd key actually deliver? */
-
-	if (kstate & K_CTRL)
-		nf_debugprintf("[BESPOKE] ctrl key 0x%x kstate 0x%x\n", (int) uk, (int) kstate);
-
 	/* Ctrl+F1..F4: switch desktops (Bespoke). Match on the raw scan code
 	 * plus the real keyboard state, up front - the xdialog layer can fold
 	 * modifier flags into the key value, so a Ctrl'd F-key is not

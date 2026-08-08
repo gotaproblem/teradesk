@@ -475,17 +475,11 @@ static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 				x >= tb_pager[d].g_x && x < tb_pager[d].g_x + tb_pager[d].g_w &&
 				y >= tb_pager[d].g_y && y < tb_pager[d].g_y + tb_pager[d].g_h)
 			{
-				nf_debugprintf("[BESPOKE] pager click desk %d\n", (int) d);
 				dsk_switch(d);
 				tb_dirty = TRUE;		/* repaint the pager promptly */
 				return;
 			}
 		}
-
-		nf_debugprintf("[BESPOKE] bar click %d,%d no target (pager1 %d,%d %dx%d)\n",
-					   (int) x, (int) y,
-					   (int) tb_pager[0].g_x, (int) tb_pager[0].g_y,
-					   (int) tb_pager[0].g_w, (int) tb_pager[0].g_h);
 	}
 }
 
