@@ -1183,6 +1183,20 @@ static void tb_open(void)
 	{
 		tb_build();
 		xw_open(tb_window, &size);		/* first WM_REDRAW paints it */
+
+		/* THE toolbar essential: without this, a click on the bar while
+		 * any other window is topped is not a click at all - the AES
+		 * swallows it as a WM_TOPPED request (which the bar ignores),
+		 * and every bar button plays dead until all windows are closed.
+		 * WF_BEVENT marks the window to receive button events WITHOUT
+		 * being topped (AES 4 / XaAES / MagiC; harmlessly refused on
+		 * older systems, where a single-tasking desktop rarely has the
+		 * bar covered anyway). */
+
+#ifndef WF_BEVENT
+#define WF_BEVENT 24
+#endif
+		wind_set(xw_handle(tb_window), WF_BEVENT, 1, 0, 0, 0);
 	} else
 	{
 		xform_error(error);
