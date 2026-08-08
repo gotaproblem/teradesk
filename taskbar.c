@@ -207,7 +207,7 @@ static void tb_line(_WORD x1, _WORD y1, _WORD x2, _WORD y2, _WORD colour)
  * Text is drawn in the default (window text) font.
  */
 
-static void tb_drawcell(_WORD *x, char *text, bool raised, bool alert)
+static void tb_drawcell(_WORD *x, char *text, bool raised, bool alert, bool sel)
 {
 	_WORD dark = (xd_ncolours >= 16) ? G_LBLACK : G_BLACK;
 	_WORD w = (_WORD) strlen(text) * tb_cw + 2 * TB_HPAD;
@@ -222,6 +222,14 @@ static void tb_drawcell(_WORD *x, char *text, bool raised, bool alert)
 		/* alert phase: red cell, white text (inverted on mono) */
 
 		bg = (xd_ncolours >= 16) ? G_RED : G_BLACK;
+		fg = G_WHITE;
+	} else if (sel)
+	{
+		/* selected (the active desk's pager button): dark grey cell,
+		 * white text - the sunken-vs-raised bevel alone is a single
+		 * pixel of difference and invisible at 1920x1080 */
+
+		bg = dark;
 		fg = G_WHITE;
 	}
 
@@ -321,7 +329,7 @@ static void tb_drawpart(GRECT *clip)
 			_WORD x0 = x;
 			bool alert = (i == 3 && tb_throttled != 0 && tb_flash != 0);
 
-			tb_drawcell(&x, tb_cell[i], (i == 0), alert);
+			tb_drawcell(&x, tb_cell[i], (i == 0), alert, FALSE);
 
 			if (i == 0)
 			{
@@ -343,7 +351,7 @@ static void tb_drawpart(GRECT *clip)
 					_WORD p0 = x;
 
 					nm[0] = (char) ('1' + d);
-					tb_drawcell(&x, nm, (d != cur), FALSE);
+					tb_drawcell(&x, nm, (d != cur), FALSE, (d == cur));
 
 					tb_pager[d].g_x = p0;
 					tb_pager[d].g_y = tb_rect.g_y + TB_VPAD;
@@ -379,7 +387,7 @@ static void tb_drawpart(GRECT *clip)
 		x = tb_rect.g_x + tb_rect.g_w - TB_GAP -
 			((_WORD) strlen(tb_clock) * tb_cw + 2 * TB_HPAD);
 		x0 = x;
-		tb_drawcell(&x, tb_clock, FALSE, FALSE);
+		tb_drawcell(&x, tb_clock, FALSE, FALSE, FALSE);
 
 		tb_clockr.g_x = x0;
 		tb_clockr.g_y = tb_rect.g_y + TB_VPAD;
