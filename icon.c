@@ -3094,6 +3094,104 @@ static void dsk_ctx_populate(void)
 }
 
 
+#if _MINT_
+
+/*
+ * Bespoke: GEM applications follow their desktop too. A launched
+ * program is a separate AES client whose windows TeraDesk cannot tag,
+ * but XaAES/N.AES/MagiC can hide a whole APPLICATION - appl_control
+ * opcodes 10/11, the same channel wd_top_app() already uses for
+ * topping. Every application is tagged with the desktop that was
+ * current when it first appeared; switching hides the others' and
+ * shows the new desk's own.
+ */
+
+#define DSK_MAXAPPS	32
+
+typedef struct
+{
+	_WORD id;							/* AES application id */
+	_WORD desk;							/* the desktop it belongs to */
+	bool seen;							/* mark/sweep against app exit */
+} DSKAPP;
+
+static DSKAPP dsk_apps[DSK_MAXAPPS];
+static _WORD dsk_napps = 0;
+
+
+/*
+ * Scan the AES application list; unknown GEM applications are tagged
+ * with the CURRENT desktop - called at the START of a switch, so
+ * anything launched since the last switch lands on the desk it was
+ * started from. Exited applications fall out of the registry.
+ * Accessories and system processes are never touched.
+ */
+
+static void dsk_app_scan(void)
+{
+	char name[16];
+	_WORD type, id, i, j, more;
+
+	if (!(naes || aes_ctrl))
+		return;
+
+	for (i = 0; i < dsk_napps; i++)
+		dsk_apps[i].seen = FALSE;
+
+	more = appl_search(0, name, &type, &id);		/* APP_FIRST */
+
+	while (more)
+	{
+		if ((type & 1) != 0 && id != ap_id && id > 0)	/* APP_APPLICATION, not us */
+		{
+			for (i = 0; i < dsk_napps; i++)
+				if (dsk_apps[i].id == id)
+					break;
+
+			if (i < dsk_napps)
+				dsk_apps[i].seen = TRUE;
+			else if (dsk_napps < DSK_MAXAPPS)
+			{
+				dsk_apps[dsk_napps].id = id;
+				dsk_apps[dsk_napps].desk = dsk_cur;
+				dsk_apps[dsk_napps].seen = TRUE;
+				dsk_napps++;
+			}
+		}
+
+		more = appl_search(1, name, &type, &id);	/* APP_NEXT */
+	}
+
+	/* sweep the exited */
+
+	j = 0;
+
+	for (i = 0; i < dsk_napps; i++)
+	{
+		if (dsk_apps[i].seen)
+			dsk_apps[j++] = dsk_apps[i];
+	}
+
+	dsk_napps = j;
+}
+
+
+static void dsk_app_show(_WORD desk)
+{
+	_WORD i;
+
+	if (!(naes || aes_ctrl))
+		return;
+
+	for (i = 0; i < dsk_napps; i++)
+		appl_control(dsk_apps[i].id,
+					 (dsk_apps[i].desk == desk) ? 11 : 10,	/* APC_SHOW/HIDE */
+					 NULL);
+}
+
+#endif /* _MINT_ */
+
+
 /*
  * The full desktop switch: drop the old desk's wallpaper (while its
  * tree is still current), swap contexts, populate a first-visit desk
@@ -3119,6 +3217,10 @@ void dsk_switch(_WORD k)
 		return;
 	}
 
+#if _MINT_
+	dsk_app_scan();						/* tag launches to the desk being left */
+#endif
+
 	bk_drop();
 	dsk_ctx_adopt(k);
 
@@ -3128,6 +3230,10 @@ void dsk_switch(_WORD k)
 	bk_init();							/* regenerates by itself on success */
 	regen_desktop(desktop);
 	xw_desk_show(k);					/* per-desk windows follow the switch */
+
+#if _MINT_
+	dsk_app_show(k);					/* per-desk applications too */
+#endif
 
 	nf_debugprintf("[BESPOKE] switched to desk %d\n", (int) k);
 }
