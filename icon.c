@@ -3108,6 +3108,10 @@ static void dsk_ctx_populate(void)
 
 #define DSK_MAXAPPS	32
 
+#ifndef APP_APPLICATION
+#define APP_APPLICATION 0x02			/* AES 4.0 appl_search type flag */
+#endif
+
 typedef struct
 {
 	_WORD id;							/* AES application id */
@@ -3130,9 +3134,9 @@ static _WORD dsk_napps = 0;
 static void dsk_app_scan(void)
 {
 	char name[16];
-	_WORD type, id, i, j, more;
+	_WORD type, id, i, j, more, guard = 64;
 
-	if (!(naes || aes_ctrl))
+	if (!mint && !magx)
 		return;
 
 	for (i = 0; i < dsk_napps; i++)
@@ -3140,9 +3144,16 @@ static void dsk_app_scan(void)
 
 	more = appl_search(0, name, &type, &id);		/* APP_FIRST */
 
-	while (more)
+	while (more && guard-- > 0)
 	{
-		if ((type & 1) != 0 && id != ap_id && id > 0)	/* APP_APPLICATION, not us */
+		nf_debugprintf("[BESPOKE] appscan id %d type 0x%x %s\n",
+					   (int) id, (int) type, name);
+
+		/* real applications only: never us, never accessories or
+		 * system processes. The constant comes from the AES headers -
+		 * numeric guesses got this wrong once already. */
+
+		if ((type & APP_APPLICATION) != 0 && id != ap_id && id > 0)
 		{
 			for (i = 0; i < dsk_napps; i++)
 				if (dsk_apps[i].id == id)
@@ -3152,6 +3163,8 @@ static void dsk_app_scan(void)
 				dsk_apps[i].seen = TRUE;
 			else if (dsk_napps < DSK_MAXAPPS)
 			{
+				nf_debugprintf("[BESPOKE] appscan: new app %d -> desk %d\n",
+							   (int) id, (int) dsk_cur);
 				dsk_apps[dsk_napps].id = id;
 				dsk_apps[dsk_napps].desk = dsk_cur;
 				dsk_apps[dsk_napps].seen = TRUE;
@@ -3178,15 +3191,16 @@ static void dsk_app_scan(void)
 
 static void dsk_app_show(_WORD desk)
 {
-	_WORD i;
-
-	if (!(naes || aes_ctrl))
-		return;
+	_WORD i, r;
 
 	for (i = 0; i < dsk_napps; i++)
-		appl_control(dsk_apps[i].id,
-					 (dsk_apps[i].desk == desk) ? 11 : 10,	/* APC_SHOW/HIDE */
-					 NULL);
+	{
+		r = appl_control(dsk_apps[i].id,
+						 (dsk_apps[i].desk == desk) ? 11 : 10,	/* APC_SHOW/HIDE */
+						 NULL);
+		nf_debugprintf("[BESPOKE] app %d %s -> %d\n", (int) dsk_apps[i].id,
+					   (dsk_apps[i].desk == desk) ? "show" : "hide", (int) r);
+	}
 }
 
 #endif /* _MINT_ */
