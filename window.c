@@ -4734,6 +4734,10 @@ void wd_iopen(WINDOW *w, GRECT *oldsize, WDFLAGS *oldflags)
 
 	wd_type_title((TYP_WINDOW *) w);
 
+	/* Bespoke: this window belongs to the desktop it is opened on */
+
+	xw_set_desk(w, dsk_current());
+
 	xw_open(w, &size);
 
 #if _MINT_

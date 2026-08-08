@@ -119,6 +119,17 @@ typedef struct wd_func
 #define XWF_ICN 1	/* is iconified */
 #define XWF_SIM 2	/* is a simulated window */
 #define XWF_OPN 4	/* window has been opened */
+#define XWF_HID 8	/* hidden by a desktop switch (Bespoke) */
+
+/*
+ * Bespoke Desktop: a window can be tagged as belonging to one desktop
+ * (0-3), packed into xw_xflags bits 4-6 (0x40 = tagged, 0x30 = desk
+ * number) so the WINDOW layout stays untouched. Untagged windows (the
+ * taskbar, monitor, tooltips, accessories) are visible on every desk.
+ */
+
+void xw_set_desk(WINDOW *w, _WORD desk);
+void xw_desk_show(_WORD desk);
 
 /*
  * Declaratie van de voor de gebruiker beschikbare funkties.

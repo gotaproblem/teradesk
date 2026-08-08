@@ -269,6 +269,55 @@ WINDOW *xw_first(void)
 
 
 /*
+ * Bespoke Desktop: tag a window as belonging to desktop 'desk' (0-3).
+ * The tag lives in xw_xflags bits 4-6 - see xwindow.h.
+ */
+
+void xw_set_desk(WINDOW *w, _WORD desk)
+{
+	w->xw_xflags = (w->xw_xflags & ~0x0070) | 0x0040 | ((desk & 3) << 4);
+}
+
+
+/*
+ * Bespoke Desktop: show the windows of desktop 'desk', hide the rest.
+ * Hiding closes the AES window but keeps every scrap of library and
+ * application state (XWF_OPN stays set; XWF_HID marks the disguise), so
+ * returning to the desk reopens the window exactly where it was, still
+ * iconified if it was iconified. Untagged and simulated windows are
+ * never touched.
+ */
+
+void xw_desk_show(_WORD desk)
+{
+	WINDOW *w = windows;
+
+	while (w != NULL)
+	{
+		if ((w->xw_xflags & 0x0040) != 0 && (w->xw_xflags & XWF_SIM) == 0)
+		{
+			_WORD wd = (w->xw_xflags >> 4) & 3;
+
+			if (wd != desk)
+			{
+				if ((w->xw_xflags & XWF_OPN) != 0 && (w->xw_xflags & XWF_HID) == 0)
+				{
+					wind_close(w->xw_handle);
+					w->xw_xflags |= XWF_HID;
+				}
+			} else if ((w->xw_xflags & XWF_HID) != 0)
+			{
+				wind_open_grect(w->xw_handle, &w->xw_size);
+				w->xw_xflags &= ~XWF_HID;
+			}
+		}
+
+		w = w->xw_next;
+	}
+}
+
+
+/*
  * Funktie die het laatste window uit de windowlijst teruggeeft.
  *
  * Resultaat: NULL als er geen window geopend is, anders een pointer

@@ -3083,6 +3083,7 @@ void dsk_switch(_WORD k)
 	dsk_ctx_adopt(k);
 	bk_init();							/* regenerates by itself on success */
 	regen_desktop(desktop);
+	xw_desk_show(k);					/* per-desk windows follow the switch */
 
 	nf_debugprintf("[BESPOKE] switched to desk %d\n", (int) k);
 }
