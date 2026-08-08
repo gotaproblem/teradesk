@@ -185,8 +185,13 @@ WINDOW *xw_top(void)
 
 	while (w)
 	{
-		if ((w->xw_xflags & XWF_OPN) != 0)
-			return w;					/* first teradesk's window */
+		/* Bespoke: a window hidden by a desktop switch must be invisible
+		 * to the library too, or it becomes a phantom "top window" that
+		 * soaks up keys and selection state (field bug: with a window
+		 * open, the desk switch machinery stopped responding). */
+
+		if ((w->xw_xflags & XWF_OPN) != 0 && (w->xw_xflags & XWF_HID) == 0)
+			return w;					/* first teradesk's VISIBLE window */
 
 		w = xw_next(w);
 	}

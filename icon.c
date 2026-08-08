@@ -3060,18 +3060,58 @@ _WORD dsk_current(void)
 
 
 /*
+ * First visit to a fresh desk: populate it with a copy of desk 1's
+ * icons (drives, printer, trash - whatever lives there), so a new desk
+ * starts useful instead of empty. It is a COPY: rearranging or removing
+ * icons afterwards affects only that desk. Name strings are duplicated
+ * because add_icon takes ownership of them.
+ */
+
+static void dsk_ctx_populate(void)
+{
+	ICON *ic = dsk_ctx[0].icons;
+	_WORD i;
+
+	if (ic == NULL || ic == desk_icons)
+		return;
+
+	for (i = 0; i < max_icons; i++, ic++)
+	{
+		if (ic->item_type != ITM_NOTUSED)
+		{
+			char *nm = NULL;
+
+			if (isfilenet(ic->item_type))
+			{
+				if ((nm = strdup(ic->icon_dat.name)) == NULL)
+					continue;
+			}
+
+			add_icon(ic->item_type, ic->tgt_type, ic->link, ic->icon_index,
+					 ic->label, ic->icon_dat.drv, ic->x, ic->y, FALSE, nm);
+		}
+	}
+}
+
+
+/*
  * The full desktop switch: drop the old desk's wallpaper (while its
- * tree is still current), swap contexts, load the new desk's wallpaper,
- * regenerate. Refused quietly if the target cannot be allocated.
+ * tree is still current), swap contexts, populate a first-visit desk
+ * with desk 1's icons, load the new desk's wallpaper, regenerate.
+ * Refused quietly if the target cannot be allocated.
  */
 
 void dsk_switch(_WORD k)
 {
+	bool fresh;
+
 	nf_debugprintf("[BESPOKE] dsk_switch %d cur %d desktop %s\n",
 				   (int) k, (int) dsk_cur, desktop ? "ok" : "NULL");
 
 	if (k < 0 || k >= DSK_NDESKS || k == dsk_cur || desktop == NULL)
 		return;
+
+	fresh = (dsk_ctx[k].tree == NULL);
 
 	if (!dsk_ctx_alloc(k))
 	{
@@ -3081,6 +3121,10 @@ void dsk_switch(_WORD k)
 
 	bk_drop();
 	dsk_ctx_adopt(k);
+
+	if (fresh)
+		dsk_ctx_populate();
+
 	bk_init();							/* regenerates by itself on success */
 	regen_desktop(desktop);
 	xw_desk_show(k);					/* per-desk windows follow the switch */
