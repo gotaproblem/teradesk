@@ -637,7 +637,13 @@ static void tip_show(GRECT *anchor)
 	tip_win = xw_create(TIP_WIND, &tip_functions, 0, &size, sizeof(TIP_WINDOW), NULL, &error);
 
 	if (tip_win != NULL)
+	{
 		xw_open(tip_win, &size);
+
+		/* sticky on all workspaces, like the bar it belongs to */
+
+		appl_control(-1, 103, (void *) (long) xw_handle(tip_win));
+	}
 }
 
 
@@ -1197,6 +1203,13 @@ static void tb_open(void)
 #define WF_BEVENT 24
 #endif
 		wind_set(xw_handle(tb_window), WF_BEVENT, 1, 0, 0, 0);
+
+		/* Bespoke XaAES workspaces: mark the bar sticky (opcode 103) so
+		 * it stays visible on every desktop instead of being carried
+		 * away by a workspace switch. Answers 0 and does nothing on a
+		 * stock AES. */
+
+		appl_control(-1, 103, (void *) (long) xw_handle(tb_window));
 	} else
 	{
 		xform_error(error);

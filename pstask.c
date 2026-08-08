@@ -834,6 +834,11 @@ void mn_open(void)
 	wind_set_str(xw_handle(mn_win), WF_NAME, mn_title);
 	xw_open(mn_win, &size);
 
+	/* Bespoke XaAES workspaces: the monitor is a system tool - sticky
+	 * on every desktop (opcode 103; harmlessly refused elsewhere). */
+
+	appl_control(-1, 103, (void *) (long) xw_handle(mn_win));
+
 #if _MINT_
 	top_task = 0;
 	mn_clamp();

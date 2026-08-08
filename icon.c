@@ -3094,7 +3094,7 @@ static void dsk_ctx_populate(void)
 }
 
 
-#if _MINT_
+#if 0	/* superseded by XaAES bespoke workspaces (appl_control opcode 100) */
 
 /*
  * Bespoke: GEM applications follow their desktop too. A launched
@@ -3104,6 +3104,13 @@ static void dsk_ctx_populate(void)
  * topping. Every application is tagged with the desktop that was
  * current when it first appeared; switching hides the others' and
  * shows the new desk's own.
+ *
+ * RETIRED: app-level hiding cannot split one application's windows
+ * across desktops (a TOS program's console is one of TOSWIN2's many
+ * windows), so it either echoed programs everywhere or dragged the
+ * console along. The bespoke XaAES patch tags each WINDOW with the
+ * workspace it opened on and does the whole switch in the kernel;
+ * see dsk_switch() below. Kept for reference only.
  */
 
 #define DSK_MAXAPPS	32
@@ -3203,7 +3210,7 @@ static void dsk_app_show(_WORD desk)
 	}
 }
 
-#endif /* _MINT_ */
+#endif /* retired app-hiding registry */
 
 
 /*
@@ -3231,29 +3238,26 @@ void dsk_switch(_WORD k)
 		return;
 	}
 
-#if _MINT_
-	dsk_app_scan();						/* tag launches to the desk being left */
-#endif
-
 	bk_drop();
 	dsk_ctx_adopt(k);
 
 	if (fresh)
 		dsk_ctx_populate();
 
-	/* Hide the leavers FIRST - windows and whole applications - so that
-	 * the desktop repaint below paints its background over whatever they
-	 * left behind. Order matters: a program that draws outside its
-	 * tracked window (a raw-VDI benchmark like GEMBench, a busy TOS
-	 * console) leaves residue the AES will not sweep on its own, so the
-	 * repaint has to come AFTER the hide, not before (the original bug -
-	 * regen ran first and the residue survived). */
+	/* Hide the leavers FIRST, so the desktop repaint below paints its
+	 * background over whatever they left behind (a raw-VDI benchmark or
+	 * a busy TOS console draws outside anything the AES will sweep).
+	 *
+	 * The real mechanism is the Bespoke XaAES: one appl_control and the
+	 * window manager moves EVERY window - other applications' included,
+	 * each individual TOS console too - to and from this desk (opcode
+	 * 100; see the true-independent-desktops design doc). On a stock
+	 * XaAES the opcode answers 0 and TeraDesk falls back to hiding just
+	 * its own windows; the earlier per-APPLICATION hiding experiment
+	 * above is retired (#if 0) - wrong semantics for console programs. */
 
-	xw_desk_show(k);					/* per-desk windows follow the switch */
-
-#if _MINT_
-	dsk_app_show(k);					/* per-desk applications too */
-#endif
+	if (appl_control(-1, 100, (void *) (long) k) == 0)
+		xw_desk_show(k);				/* fallback: own windows only */
 
 	bk_init();							/* regenerates by itself on success */
 	regen_desktop(desktop);
