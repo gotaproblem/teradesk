@@ -3214,6 +3214,25 @@ static void dsk_app_show(_WORD desk)
 
 
 /*
+ * Sweep the whole screen clean: form_dial(FMD_FINISH) makes the AES
+ * send WM_REDRAW to every window in the area and repaint the desktop.
+ * This is the one remedy against raw-VDI drawing (a running GEMBench)
+ * that lands on whatever desk happens to be visible - the AES cannot
+ * clip another process's direct VDI calls, but it CAN repaint
+ * everything the moment we ask. Full screen, not xd_desk, so residue
+ * sprayed over the taskbar strip is swept too.
+ */
+
+static void dsk_sweep(void)
+{
+	form_dial(FMD_START, xd_screen.g_x, xd_screen.g_y, xd_screen.g_w, xd_screen.g_h,
+			  xd_screen.g_x, xd_screen.g_y, xd_screen.g_w, xd_screen.g_h);
+	form_dial(FMD_FINISH, xd_screen.g_x, xd_screen.g_y, xd_screen.g_w, xd_screen.g_h,
+			  xd_screen.g_x, xd_screen.g_y, xd_screen.g_w, xd_screen.g_h);
+}
+
+
+/*
  * The full desktop switch: drop the old desk's wallpaper (while its
  * tree is still current), swap contexts, populate a first-visit desk
  * with desk 1's icons, load the new desk's wallpaper, regenerate.
@@ -3227,8 +3246,16 @@ void dsk_switch(_WORD k)
 	nf_debugprintf("[BESPOKE] dsk_switch %d cur %d desktop %s\n",
 				   (int) k, (int) dsk_cur, desktop ? "ok" : "NULL");
 
-	if (k < 0 || k >= DSK_NDESKS || k == dsk_cur || desktop == NULL)
+	if (k < 0 || k >= DSK_NDESKS || desktop == NULL)
 		return;
+
+	if (k == dsk_cur)
+	{
+		/* clicking the desk you are already on = sweep it clean;
+		 * the way to tidy up after a benchmark without leaving */
+		dsk_sweep();
+		return;
+	}
 
 	fresh = (dsk_ctx[k].tree == NULL);
 
@@ -3261,7 +3288,10 @@ void dsk_switch(_WORD k)
 
 	bk_init();							/* regenerates by itself on success */
 	regen_desktop(desktop);
-	redraw_desk(&xd_desk);				/* full sweep over any orphaned pixels */
+	redraw_desk(&xd_desk);				/* instant background underneath... */
+	dsk_sweep();						/* ...then every window repaints too,
+										 * sweeping any raw-VDI residue off
+										 * windows and taskbar alike */
 
 	nf_debugprintf("[BESPOKE] switched to desk %d\n", (int) k);
 }
