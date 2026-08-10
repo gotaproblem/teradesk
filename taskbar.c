@@ -38,6 +38,7 @@
 #include "main.h"
 #include "window.h"
 #include "icon.h"
+#include "btheme.h"
 #include "taskbar.h"
 #include "pstask.h"
 
@@ -296,28 +297,26 @@ static void tb_line(_WORD x1, _WORD y1, _WORD x2, _WORD y2, _WORD colour)
 
 static void tb_drawcell(_WORD *x, char *text, bool raised, bool alert, bool sel)
 {
-	_WORD dark = (xd_ncolours >= 16) ? G_LBLACK : G_BLACK;
+	const BTHEME *t = bt();
 	_WORD w = (_WORD) strlen(text) * tb_cw + 2 * TB_HPAD;
 	_WORD y1 = tb_rect.g_y + TB_VPAD;
 	_WORD y2 = tb_rect.g_y + tb_rect.g_h - TB_VPAD - 1;
-	_WORD bg = G_WHITE;
-	_WORD fg = G_BLACK;
-	GRECT in;
+	_WORD bg = t->face;
+	_WORD fg = t->text;
+	GRECT in, cell;
 
 	if (alert)
 	{
-		/* alert phase: red cell, white text (inverted on mono) */
+		/* alert phase: themed alert cell (inverted to black on mono) */
 
-		bg = (xd_ncolours >= 16) ? G_RED : G_BLACK;
-		fg = G_WHITE;
+		bg = (xd_ncolours >= 16) ? t->alert_bg : G_BLACK;
+		fg = t->alert_fg;
 	} else if (sel)
 	{
-		/* selected (the active desk's pager button): dark grey cell,
-		 * white text - the sunken-vs-raised bevel alone is a single
-		 * pixel of difference and invisible at 1920x1080 */
+		/* selected (the active desk's pager button): themed selection */
 
-		bg = dark;
-		fg = G_WHITE;
+		bg = t->sel_bg;
+		fg = t->sel_fg;
 	}
 
 	/* cell interior */
@@ -328,23 +327,13 @@ static void tb_drawcell(_WORD *x, char *text, bool raised, bool alert, bool sel)
 	in.g_h = y2 - y1 - 1;
 	clr_object(&in, bg, -1);
 
-	if (raised)
-	{
-		/* raised bevel: this cell is a button (the PiSTorm badge) */
+	/* the 3D edge, from the theme (raised = button, else sunken) */
 
-		tb_line(*x, y1, *x + w - 1, y1, G_WHITE);
-		tb_line(*x, y1, *x, y2, G_WHITE);
-		tb_line(*x, y2, *x + w - 1, y2, dark);
-		tb_line(*x + w - 1, y1 + 1, *x + w - 1, y2, dark);
-	} else
-	{
-		/* sunken bevel: dark top/left, light bottom/right */
-
-		tb_line(*x, y1, *x + w - 1, y1, dark);
-		tb_line(*x, y1, *x, y2, dark);
-		tb_line(*x, y2, *x + w - 1, y2, G_WHITE);
-		tb_line(*x + w - 1, y1 + 1, *x + w - 1, y2, G_WHITE);
-	}
+	cell.g_x = *x;
+	cell.g_y = y1;
+	cell.g_w = w;
+	cell.g_h = y2 - y1 + 1;
+	bt_bevel(&cell, raised ? BT_RAISED : BT_SUNK);
 
 	/* the text; the font is set to top-of-cell alignment */
 
@@ -387,9 +376,11 @@ static void tb_setfont(void)
 
 static void tb_drawpart(GRECT *clip)
 {
+	const BTHEME *t = bt();
 	_WORD i, x;
-	_WORD dark = (xd_ncolours >= 16) ? G_LBLACK : G_BLACK;
-	_WORD grey = (xd_ncolours >= 16) ? G_LWHITE : G_WHITE;
+	_WORD grey = (xd_ncolours >= 16) ? t->panel : G_WHITE;
+	_WORD light = (xd_ncolours >= 16) ? t->light : G_WHITE;
+	_WORD dark = (xd_ncolours >= 16) ? t->dark : G_BLACK;
 	GRECT in;
 
 	xd_clip_on(clip);
@@ -400,7 +391,7 @@ static void tb_drawpart(GRECT *clip)
 	in = tb_rect;
 	clr_object(&in, grey, -1);
 
-	tb_line(tb_rect.g_x, tb_rect.g_y, tb_rect.g_x + tb_rect.g_w - 1, tb_rect.g_y, G_WHITE);
+	tb_line(tb_rect.g_x, tb_rect.g_y, tb_rect.g_x + tb_rect.g_w - 1, tb_rect.g_y, light);
 	tb_line(tb_rect.g_x, tb_rect.g_y + tb_rect.g_h - 1,
 			tb_rect.g_x + tb_rect.g_w - 1, tb_rect.g_y + tb_rect.g_h - 1, dark);
 
@@ -1200,6 +1191,8 @@ static void tb_open(void)
 		tb_psid = nf_get_id("PSCTRL");
 
 	tb_timesync();						/* set the system clock from the Pi */
+
+	bt_use(options.thm);				/* Bespoke UI theme (0 = GEM Grey) */
 
 	tb_read_apjver();					/* APJ-OS version cell (S:\APJOS.VER) */
 

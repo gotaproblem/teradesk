@@ -182,6 +182,7 @@ typedef struct
 	_WORD tbtf;					/* taskbar time format: 0 24h, 1 12h am/pm */
 	_WORD tbdf;					/* taskbar date: 0 "Thu 6 Aug", 1 "Thu Aug 6", 2 off */
 	_WORD wallm;				/* wallpaper mode: 0 stretch, 1 fit */
+	_WORD thm;					/* Bespoke UI theme index (0 = GEM Grey) */
 	VLNAME psdir;				/* directory scanned for the PiSTorm menu */
 	VLNAME wallp;				/* wallpaper image path (PNG/JPG) */
 } Options;

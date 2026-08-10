@@ -189,6 +189,7 @@ static CfgEntry const Options_table[] = {
 	CFG_S("psdr", options.psdir),	/* PiSTorm apps directory */
 	CFG_S("wall", options.wallp),	/* wallpaper image (PNG/JPG) */
 	CFG_D("walm", options.wallm),	/* wallpaper mode: 0 stretch, 1 fit */
+	CFG_D("thm", options.thm),		/* Bespoke UI theme index */
 
 	CFG_ENDG(),
 	CFG_LAST()

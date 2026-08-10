@@ -51,6 +51,7 @@ SRCS = \
 	showinfo.c showinfo.h \
 	font.c font.h \
 	va.c va.h \
+	btheme.c btheme.h \
 	taskbar.c taskbar.h \
 	psmenu.c psmenu.h \
 	bkgimg.c bkgimg.h \
