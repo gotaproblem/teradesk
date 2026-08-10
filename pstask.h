@@ -25,14 +25,18 @@
 #define __PSTASK_H__
 
 /*
- * Bespoke Desktop PiSTorm monitor window: ST/TT memory usage and, under
- * FreeMiNT, a scrollable list of running tasks (from u:\proc, as the
- * standalone PSMON did). Opened by clicking the PiSTorm badge on the
- * taskbar; refreshed from the taskbar's 500 ms tick.
+ * Bespoke Desktop taskbar v2 panels: the JIT panel (live engine figures
+ * plus the ST/TT memory gauges, toggled by the taskbar's JIT button)
+ * and the PiSTorm system-tasks menu (toggled by the PiSTorm button).
+ * Both refresh from the taskbar's 500 ms tick.
  */
 
-void mn_open(void);						/* open (or top) the monitor window */
+void mn_open(void);						/* open (or top) the JIT panel */
+void mn_toggle(void);					/* JIT button click */
 void mn_tick(void);						/* periodic refresh while open */
-void mn_close(void);					/* close the window */
+void mn_close(void);					/* close the panel */
+
+void sm_toggle(void);					/* PiSTorm button click */
+void sm_close(void);					/* close the system menu */
 
 #endif

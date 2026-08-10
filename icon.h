@@ -49,6 +49,7 @@ bool dsk_init(void);
 
 void dsk_switch(_WORD desk);
 _WORD dsk_current(void);
+void dsk_sweep(void);					/* full-screen redraw broadcast */
 _WORD dsk_load(XFILE *file);
 void dsk_default(void);
 void dsk_close(void);

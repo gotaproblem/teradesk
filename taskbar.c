@@ -75,10 +75,12 @@
 #define PS_HOST_TIME_DOS	68L
 #define PS_HOST_DATE_DOS	69L
 #define PS_HOST_THROTTLED	70L
+#define PS_PI_MODEL			74L
+#define PS_PI_RAM_MB		75L
 
 #define DEGREE_CH			'\370'		/* 0xF8: degree sign in the Atari charset */
 
-#define TB_NCELLS			4		/* badge, cpu/fpu, jit cache, temp */
+#define TB_NCELLS			5		/* badge, pi model, temp, cpu/fpu, jit */
 #define TB_CTEXT			28		/* max cell text length */
 #define TB_VPAD				3		/* pixels above/below cell */
 #define TB_HPAD				6		/* pixels left/right of cell text */
@@ -99,6 +101,7 @@ static struct nf_ops *tb_nf = NULL;	/* NatFeats call table */
 static char tb_cell[TB_NCELLS][TB_CTEXT];	/* left-hand cell texts */
 static char tb_clock[24];					/* right-hand date + clock text */
 static char tb_cpustr[16];					/* "68040/FPU" etc., built once */
+static char tb_pistr[16];					/* "Pi4B 2GB" etc., built once */
 static GRECT tb_badge;						/* screen rect of the PiSTorm button */
 static _WORD tb_throttled = 0;				/* Pi reports active throttling */
 static _WORD tb_flash = 0;					/* alert flash phase, toggles per tick */
@@ -124,7 +127,7 @@ static WINDOW *tip_win = NULL;				/* the tooltip window */
 
 static char tip_lines[TIP_MAXLINES][TIP_MAXLEN];	/* tooltip text lines */
 static _WORD tip_nlines = 0;
-static _WORD tip_kind = 0;					/* 0 none, 1 uptime, 2 throttle, 3 jit */
+static _WORD tip_kind = 0;					/* 0 none, 1 uptime, 2 throttle */
 static _WORD tip_minw = 0;					/* min box width in chars (live tips) */
 static GRECT tb_tempr;						/* screen rect of the Temp cell */
 static GRECT tb_jitr;						/* screen rect of the JIT cell */
@@ -317,8 +320,9 @@ static void tb_drawpart(GRECT *clip)
 	tb_line(tb_rect.g_x, tb_rect.g_y + tb_rect.g_h - 1,
 			tb_rect.g_x + tb_rect.g_w - 1, tb_rect.g_y + tb_rect.g_h - 1, dark);
 
-	/* left-hand cells; cell 0 (the PiSTorm badge) is a raised button
-	 * that opens the monitor window, so remember where it is */
+	/* left-hand cells, taskbar v2 order:
+	 * 0 PiSTorm button (system menu), 1 Pi model+RAM, 2 Temp,
+	 * 3 CPU/FPU, 4 JIT button (JIT panel) */
 
 	x = tb_rect.g_x + TB_GAP;
 
@@ -327,46 +331,25 @@ static void tb_drawpart(GRECT *clip)
 		if (tb_cell[i][0] != 0)
 		{
 			_WORD x0 = x;
-			bool alert = (i == 3 && tb_throttled != 0 && tb_flash != 0);
+			bool alert = (i == 2 && tb_throttled != 0 && tb_flash != 0);
 
-			tb_drawcell(&x, tb_cell[i], (i == 0), alert, FALSE);
+			tb_drawcell(&x, tb_cell[i], (i == 0 || i == 4), alert, FALSE);
 
 			if (i == 0)
 			{
-				_WORD d, cur = dsk_current();
-				char nm[2];
-
 				tb_badge.g_x = x0;
 				tb_badge.g_y = tb_rect.g_y + TB_VPAD;
 				tb_badge.g_w = x - TB_GAP - x0;
 				tb_badge.g_h = tb_rect.g_h - 2 * TB_VPAD;
-
-				/* the desktop pager, right after the badge: one small
-				 * numbered button per desk, the current one pressed */
-
-				nm[1] = 0;
-
-				for (d = 0; d < DSK_NDESKS; d++)
-				{
-					_WORD p0 = x;
-
-					nm[0] = (char) ('1' + d);
-					tb_drawcell(&x, nm, (d != cur), FALSE, (d == cur));
-
-					tb_pager[d].g_x = p0;
-					tb_pager[d].g_y = tb_rect.g_y + TB_VPAD;
-					tb_pager[d].g_w = x - TB_GAP - p0;
-					tb_pager[d].g_h = tb_rect.g_h - 2 * TB_VPAD;
-				}
-			} else if (i == 2)
+			} else if (i == 4)
 			{
-				/* the JIT cell: hovering it pops up the engine figures */
+				/* the JIT button: clicking it toggles the JIT panel */
 
 				tb_jitr.g_x = x0;
 				tb_jitr.g_y = tb_rect.g_y + TB_VPAD;
 				tb_jitr.g_w = x - TB_GAP - x0;
 				tb_jitr.g_h = tb_rect.g_h - 2 * TB_VPAD;
-			} else if (i == 3)
+			} else if (i == 2)
 			{
 				/* the Temp cell: hovering it pops up the throttle events */
 
@@ -375,6 +358,32 @@ static void tb_drawpart(GRECT *clip)
 				tb_tempr.g_w = x - TB_GAP - x0;
 				tb_tempr.g_h = tb_rect.g_h - 2 * TB_VPAD;
 			}
+		}
+	}
+
+	/* the desktop pager, centred as a group in the middle of the bar:
+	 * one small numbered button per desk, the current one dark */
+
+	{
+		_WORD d, cur = dsk_current();
+		_WORD pw = (_WORD) (DSK_NDESKS * (tb_cw + 2 * TB_HPAD) +
+							(DSK_NDESKS - 1) * TB_GAP);
+		char nm[2];
+
+		x = tb_rect.g_x + (tb_rect.g_w - pw) / 2;
+		nm[1] = 0;
+
+		for (d = 0; d < DSK_NDESKS; d++)
+		{
+			_WORD p0 = x;
+
+			nm[0] = (char) ('1' + d);
+			tb_drawcell(&x, nm, (d != cur), FALSE, (d == cur));
+
+			tb_pager[d].g_x = p0;
+			tb_pager[d].g_y = tb_rect.g_y + TB_VPAD;
+			tb_pager[d].g_w = x - TB_GAP - p0;
+			tb_pager[d].g_h = tb_rect.g_h - 2 * TB_VPAD;
 		}
 	}
 
@@ -446,7 +455,8 @@ static void tb_redraw(WINDOW *w, GRECT *area)
 
 
 /*
- * Button clicks on the bar: the PiSTorm badge opens the monitor window
+ * Button clicks on the bar: the PiSTorm button toggles the system-tasks
+ * menu, the JIT button toggles the JIT panel, the pager switches desks
  */
 
 static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD kstate)
@@ -460,7 +470,15 @@ static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 		x >= tb_badge.g_x && x < tb_badge.g_x + tb_badge.g_w &&
 		y >= tb_badge.g_y && y < tb_badge.g_y + tb_badge.g_h)
 	{
-		mn_open();
+		sm_toggle();
+		return;
+	}
+
+	if (tb_jitr.g_w > 0 &&
+		x >= tb_jitr.g_x && x < tb_jitr.g_x + tb_jitr.g_w &&
+		y >= tb_jitr.g_y && y < tb_jitr.g_y + tb_jitr.g_h)
+	{
+		mn_toggle();
 		return;
 	}
 
@@ -771,84 +789,6 @@ static void tip_throttle(void)
 }
 
 
-/*
- * The JIT engine tooltip over the JIT cell: effective speed against the
- * 8 MHz ST reference, cycle-weighted hit rate, true (STOP) idle share,
- * and cache fill. Any figure an older emulator cannot supply is simply
- * omitted.
- */
-
-static void tip_jit_lines(void)
-{
-	long khz = tb_ps(71L);				/* PS_JIT_EFF_KHZ */
-	long hit = tb_ps(72L);				/* PS_JIT_HITRATE_X10 */
-	long idle = tb_ps(73L);				/* PS_JIT_IDLE_X10 */
-	long used = tb_ps(PS_STAT_CACHE_USED);
-	long total = tb_ps(PS_STAT_CACHE_TOTAL);
-	char *p;
-
-	strcpy(tip_lines[0], "PiSTorm JIT");
-	tip_nlines = 1;
-
-	if (khz > 0)
-	{
-		p = tb_app(tip_lines[tip_nlines], "Speed   : ");
-		ltoa(khz / 1000L, p, 10);
-		p += strlen(p);
-		p = tb_app(p, " MHz (");
-		ltoa((khz + 4000L) / 8000L, p, 10);
-		p += strlen(p);
-		p = tb_app(p, "x ST)");
-		tip_nlines++;
-	}
-
-	if (hit >= 0 && hit <= 1000L)
-	{
-		p = tb_app(tip_lines[tip_nlines], "JIT hit : ");
-		ltoa(hit / 10L, p, 10);
-		p += strlen(p);
-		*p++ = '.';
-		*p++ = (char) ('0' + (_WORD) (hit % 10L));
-		*p++ = '%';
-		*p = 0;
-		tip_nlines++;
-	}
-
-	if (idle >= 0 && idle <= 1000L)
-	{
-		p = tb_app(tip_lines[tip_nlines], "Idle    : ");
-		ltoa(idle / 10L, p, 10);
-		p += strlen(p);
-		*p++ = '.';
-		*p++ = (char) ('0' + (_WORD) (idle % 10L));
-		*p++ = '%';
-		*p = 0;
-		tip_nlines++;
-	}
-
-	if (total > 0)
-	{
-		p = tb_app(tip_lines[tip_nlines], "Cache   : ");
-		ltoa((used * 100L) / total, p, 10);
-		p += strlen(p);
-		p = tb_app(p, "% used");
-		tip_nlines++;
-	}
-}
-
-
-static void tip_jit(void)
-{
-	if (tip_win != NULL || tb_psid == 0)
-		return;
-
-	tip_jit_lines();
-	tip_kind = 3;
-	tip_minw = 23;						/* "Speed   : 1234 MHz (154x ST)" */
-	tip_show(&tb_jitr);
-}
-
-
 static WD_FUNC tb_functions = {
 	0L,									/* handle keypress */
 	tb_button,							/* handle button */
@@ -1042,19 +982,22 @@ static bool tb_build(void)
 
 		strcpy(new_cell[0], "PiSTorm");
 
+		if (tb_pistr[0] != 0)
+			strcpy(new_cell[1], tb_pistr);
+
 		if (tb_cpustr[0] != 0)
-			strcpy(new_cell[1], tb_cpustr);
+			strcpy(new_cell[3], tb_cpustr);
 
 		if (total > 0)
 		{
-			strcpy(new_cell[2], "JIT ");
-			ltoa((used * 100L) / total, &new_cell[2][4], 10);
-			strcat(new_cell[2], "%");
+			strcpy(new_cell[4], "JIT ");
+			ltoa((used * 100L) / total, &new_cell[4][4], 10);
+			strcat(new_cell[4], "%");
 		}
 
 		if (temp > 0)
 		{
-			p = new_cell[3];
+			p = new_cell[2];
 			strcpy(p, "Temp ");
 			ltoa(temp / 1000L, p + 5, 10);
 			p += strlen(p);
@@ -1067,7 +1010,7 @@ static bool tb_build(void)
 		{
 			/* off-cadence tick: keep showing the current value */
 
-			strcpy(new_cell[3], tb_cell[3]);
+			strcpy(new_cell[2], tb_cell[2]);
 		}
 	}
 
@@ -1179,6 +1122,64 @@ static void tb_open(void)
 					strcat(tb_cpustr, "/");
 					ltoa(fpu, tb_cpustr + strlen(tb_cpustr), 10);
 				}
+			}
+		}
+	}
+
+	/* The Pi model cell text ("Pi4B 2GB") - board type and RAM size
+	 * from the revision word the emulator decodes (indices 74/75);
+	 * absent on an old emulator, and the cell simply stays empty. */
+
+	if (tb_psid != 0)
+	{
+		long model = tb_ps(PS_PI_MODEL);
+		long ram = tb_ps(PS_PI_RAM_MB);
+
+		if (model > 0)
+		{
+			const char *nm;
+
+			switch ((_WORD) model)
+			{
+			case 0x08:
+				nm = "3B";
+				break;
+			case 0x0d:
+				nm = "3B+";
+				break;
+			case 0x0e:
+				nm = "3A+";
+				break;
+			case 0x11:
+				nm = "4B";
+				break;
+			case 0x13:
+				nm = "400";
+				break;
+			case 0x14:
+				nm = "CM4";
+				break;
+			case 0x17:
+				nm = "5";
+				break;
+			default:
+				nm = "?";
+				break;
+			}
+
+			strcpy(tb_pistr, "Pi");
+			strcat(tb_pistr, nm);
+
+			if (ram >= 1024)
+			{
+				strcat(tb_pistr, " ");
+				ltoa(ram / 1024L, tb_pistr + strlen(tb_pistr), 10);
+				strcat(tb_pistr, "GB");
+			} else if (ram > 0)
+			{
+				strcat(tb_pistr, " ");
+				ltoa(ram, tb_pistr + strlen(tb_pistr), 10);
+				strcat(tb_pistr, "MB");
 			}
 		}
 	}
@@ -1324,12 +1325,6 @@ void tb_hover(_WORD x, _WORD y)
 		{
 			tgt = TB_HOV_TEMP;
 			tb_hovrect = tb_tempr;
-		} else if (tb_jitr.g_w > 0 &&
-			x >= tb_jitr.g_x && x < tb_jitr.g_x + tb_jitr.g_w &&
-			y >= tb_jitr.g_y && y < tb_jitr.g_y + tb_jitr.g_h)
-		{
-			tgt = TB_HOV_JIT;
-			tb_hovrect = tb_jitr;
 		} else
 		{
 			/* dead space: watch a small box around the pointer */
@@ -1389,14 +1384,13 @@ void tb_tick(void)
 	{
 		if (tb_dwell < 2 && ++tb_dwell == 2)
 		{
-			if (tb_hovtgt == TB_HOV_BADGE)
-				mn_open();
-			else if (tb_hovtgt == TB_HOV_CLOCK)
+			/* buttons (PiSTorm, JIT) act on CLICK only - hover opens
+			 * nothing; the info cells keep their hover tooltips */
+
+			if (tb_hovtgt == TB_HOV_CLOCK)
 				tip_uptime();
 			else if (tb_hovtgt == TB_HOV_TEMP)
 				tip_throttle();
-			else if (tb_hovtgt == TB_HOV_JIT)
-				tip_jit();
 		}
 	}
 
@@ -1416,10 +1410,8 @@ void tb_tick(void)
 
 		if (tip_kind == 1)
 			tip_uptime_lines();
-		else if (tip_kind == 2)
-			tip_throttle_lines();
 		else
-			tip_jit_lines();
+			tip_throttle_lines();
 
 		diff = (tip_nlines != n);
 
@@ -1455,7 +1447,8 @@ void tb_tick(void)
 void tb_close(void)
 {
 	tip_close();						/* the tooltip, */
-	mn_close();							/* the monitor window too */
+	mn_close();							/* the JIT panel, */
+	sm_close();							/* and the system menu too */
 
 	if (tb_window != NULL)
 	{

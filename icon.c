@@ -3223,7 +3223,7 @@ static void dsk_app_show(_WORD desk)
  * sprayed over the taskbar strip is swept too.
  */
 
-static void dsk_sweep(void)
+void dsk_sweep(void)
 {
 	form_dial(FMD_START, xd_screen.g_x, xd_screen.g_y, xd_screen.g_w, xd_screen.g_h,
 			  xd_screen.g_x, xd_screen.g_y, xd_screen.g_w, xd_screen.g_h);

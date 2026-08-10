@@ -31,6 +31,7 @@
 #define BAR_WIND		21 /* Bespoke Desktop taskbar */
 #define MON_WIND		22 /* Bespoke Desktop PiSTorm monitor */
 #define TIP_WIND		23 /* Bespoke Desktop taskbar tooltip */
+#define SM_WIND			24 /* Bespoke Desktop system-tasks menu */
 
 #define TFLAGS			(NAME|CLOSER|FULLER|MOVER|SIZER|UPARROW|DNARROW|VSLIDE|LFARROW|RTARROW|HSLIDE|ICONIFIER)
 #define DFLAGS			(NAME|CLOSER|FULLER|MOVER|SIZER|UPARROW|DNARROW|VSLIDE|LFARROW|RTARROW|HSLIDE|ICONIFIER|INFO)
