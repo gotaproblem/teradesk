@@ -102,6 +102,9 @@ static char tb_cell[TB_NCELLS][TB_CTEXT];	/* left-hand cell texts */
 static char tb_clock[24];					/* right-hand date + clock text */
 static char tb_cpustr[16];					/* "68040/FPU" etc., built once */
 static char tb_pistr[16];					/* "Pi4B 2GB" etc., built once */
+static char tb_apjcell[20];					/* "APJ 0.1.1" bar cell, or empty */
+static char tb_apjver[16];					/* raw version "0.1.1", or empty */
+static GRECT tb_apjr;						/* screen rect of the APJ cell */
 static GRECT tb_badge;						/* screen rect of the PiSTorm button */
 static _WORD tb_throttled = 0;				/* Pi reports active throttling */
 static _WORD tb_flash = 0;					/* alert flash phase, toggles per tick */
@@ -171,6 +174,74 @@ void tb_psfx(long dir)
 {
 	if (tb_psid != 0)
 		tb_nf->call(tb_psid | 2L, dir);
+}
+
+
+/*
+ * Read the APJ-OS distribution version from S:\APJOS.VER (a one-line
+ * file the installer writes on the hostfs share), building the bar
+ * cell text "APJ-OS v<version>". The distribution version is not any
+ * one component's version, so it lives in the distribution, not the
+ * binary - bump the release, the file updates, no desktop.prg rebuild.
+ * Absent/empty file -> no cell, and the system menu keeps its plain
+ * title. Called once at startup.
+ */
+
+static void tb_read_apjver(void)
+{
+	_WORD fh;
+	long n;
+	_WORD i;
+
+	tb_apjver[0] = 0;
+	tb_apjcell[0] = 0;
+
+	fh = x_open("S:\\APJOS.VER", O_RDONLY);
+
+	if (fh < 0)
+		return;
+
+	n = x_read(fh, (long) sizeof(tb_apjver) - 1, tb_apjver);
+	x_close(fh);
+
+	if (n <= 0)
+	{
+		tb_apjver[0] = 0;
+		return;
+	}
+
+	tb_apjver[n] = 0;
+
+	/* trim at the first control char (newline/CR) or trailing space */
+
+	for (i = 0; tb_apjver[i]; i++)
+	{
+		if ((unsigned char) tb_apjver[i] < ' ')
+		{
+			tb_apjver[i] = 0;
+			break;
+		}
+	}
+
+	while (i > 0 && tb_apjver[i - 1] == ' ')
+		tb_apjver[--i] = 0;
+
+	if (tb_apjver[0] == 0)
+		return;
+
+	strcpy(tb_apjcell, "APJ-OS v");
+	strcat(tb_apjcell, tb_apjver);
+}
+
+
+/*
+ * The APJ-OS title for the system menu ("APJ-OS v0.1.1"), or NULL when
+ * no version file was found (caller keeps its default title).
+ */
+
+char *tb_apjtitle(void)
+{
+	return (tb_apjcell[0] != 0) ? tb_apjcell : NULL;
 }
 
 
@@ -402,6 +473,8 @@ static void tb_drawpart(GRECT *clip)
 
 	/* the clock, right-aligned; remember its rect for hover */
 
+	tb_apjr.g_w = 0;
+
 	if (tb_clock[0] != 0)
 	{
 		_WORD x0;
@@ -415,6 +488,23 @@ static void tb_drawpart(GRECT *clip)
 		tb_clockr.g_y = tb_rect.g_y + TB_VPAD;
 		tb_clockr.g_w = x - TB_GAP - x0;
 		tb_clockr.g_h = tb_rect.g_h - 2 * TB_VPAD;
+
+		/* the APJ-OS version cell, just left of the clock */
+
+		if (tb_apjcell[0] != 0)
+		{
+			_WORD ax0;
+
+			x = x0 - TB_GAP -
+				((_WORD) strlen(tb_apjcell) * tb_cw + 2 * TB_HPAD);
+			ax0 = x;
+			tb_drawcell(&x, tb_apjcell, FALSE, FALSE, FALSE);
+
+			tb_apjr.g_x = ax0;
+			tb_apjr.g_y = tb_rect.g_y + TB_VPAD;
+			tb_apjr.g_w = x - TB_GAP - ax0;
+			tb_apjr.g_h = tb_rect.g_h - 2 * TB_VPAD;
+		}
 	}
 
 	xd_clip_off();
@@ -1110,6 +1200,8 @@ static void tb_open(void)
 		tb_psid = nf_get_id("PSCTRL");
 
 	tb_timesync();						/* set the system clock from the Pi */
+
+	tb_read_apjver();					/* APJ-OS version cell (S:\APJOS.VER) */
 
 	/* The CPU/FPU cell text - configuration values, so built once */
 

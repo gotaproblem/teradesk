@@ -760,6 +760,7 @@ typedef struct
 
 static WINDOW *sm_win = NULL;
 static char sm_title[] = " PiSTorm System ";
+static char sm_titlebuf[28];			/* " APJ-OS v0.1.1 " when known */
 
 static char *sm_items[SM_NITEMS] = {
 	"Task Manager",
@@ -1009,7 +1010,24 @@ void sm_toggle(void)
 		return;
 	}
 
-	wind_set_str(xw_handle(sm_win), WF_NAME, sm_title);
+	{
+		/* title shows the APJ-OS release when the version file is
+		 * present, else the plain system-menu name */
+
+		char *ver = tb_apjtitle();
+
+		if (ver != NULL)
+		{
+			strcpy(sm_titlebuf, " ");
+			strcat(sm_titlebuf, ver);
+			strcat(sm_titlebuf, " ");
+			wind_set_str(xw_handle(sm_win), WF_NAME, sm_titlebuf);
+		} else
+		{
+			wind_set_str(xw_handle(sm_win), WF_NAME, sm_title);
+		}
+	}
+
 	xw_open(sm_win, &size);
 
 	/* one-click items even when the menu is not the top window (same
