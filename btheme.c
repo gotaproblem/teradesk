@@ -24,6 +24,7 @@
 #include <library.h>
 #include <xdialog.h>
 
+#include "resource.h"					/* menu constants desk.h needs */
 #include "desk.h"						/* vdi_handle */
 #include "btheme.h"
 
