@@ -29,16 +29,19 @@
  *
  * One place that owns every colour, bevel and metric the custom UI -
  * the taskbar, its cells and pager, the tooltips, the PiSTorm system
- * menu, the JIT panel and its gauges - draws with. Every panel draws
- * its style through bt() and the primitives below instead of its own
- * hardcoded G_WHITE/G_LBLACK/paddings, so switching the active theme
- * re-skins the whole desktop at once. Colours are the standard VDI-16
- * indices, so a theme is portable at any screen depth.
+ * menu, the JIT panel and its gauges - draws with, so switching the
+ * active theme re-skins the whole desktop at once.
+ *
+ * Themes carry true RGB. On a colour screen (>= 16 colours) a theme's
+ * RGB is loaded into a reserved block of VDI colour registers (indices
+ * BT_PAL_BASE..) with vs_color, and the panels draw with those indices;
+ * on mono, or for the default GEM Grey theme, the standard VDI-16
+ * indices are used directly. The returned BTHEME therefore always holds
+ * ready-to-use colour indices, whatever the depth.
  */
 
 typedef struct
 {
-	char  name[16];
 	_WORD face;			/* control / cell face                       */
 	_WORD text;			/* normal text                               */
 	_WORD light;		/* bevel highlight (top/left when raised)    */
@@ -50,9 +53,9 @@ typedef struct
 	_WORD panel;		/* window / panel background                 */
 	_WORD title_bg;		/* panel title bar                           */
 	_WORD title_fg;		/* panel title text                          */
-	_WORD hpad;			/* text inset, px (future layout use)        */
+	_WORD hpad;			/* text inset, px                            */
 	_WORD vpad;			/* cell top/bottom inset, px                 */
-	_WORD gap;			/* gap between cells, px                      */
+	_WORD gap;			/* gap between cells, px                     */
 	_WORD flat;			/* 0 = 3D bevels, 1 = flat (no bevel lines)  */
 } BTHEME;
 
@@ -60,6 +63,12 @@ typedef struct
 
 #define BT_SUNK		0	/* dark top/left, light bottom/right (cells)   */
 #define BT_RAISED	1	/* light top/left, dark bottom/right (buttons) */
+
+/* First of the reserved VDI colour registers a theme's RGB is loaded
+ * into (11 consecutive). High enough to avoid the desktop's own low
+ * indices; the wallpaper is direct-RGB at truecolour, so untouched. */
+
+#define BT_PAL_BASE	240
 
 void          bt_use(_WORD id);			/* select the active theme (clamped) */
 _WORD         bt_current(void);			/* active theme index */
