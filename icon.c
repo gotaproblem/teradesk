@@ -2775,6 +2775,13 @@ void dsk_config(XFILE *file, int lvl, int io, int *error)
 		if (dsk_cur != 0)
 			dsk_ctx_adopt(0);
 
+		/* seed desk 0's context wallpaper from the options-group values
+		 * (the 'wall'/'walm' keys load into options); keeps ctx[0]
+		 * authoritative for the per-desk save path from the outset */
+
+		dsk_ctx[0].wallm = options.wallm;
+		strcpy(dsk_ctx[0].wallp, options.wallp);
+
 		regen_desktop(desktop);
 	}
 }
@@ -3057,6 +3064,61 @@ static void dsk_ctx_adopt(_WORD k)
 _WORD dsk_current(void)
 {
 	return dsk_cur;
+}
+
+
+/*
+ * Set the CURRENT desk's wallpaper (Bespoke, from the taskbar's system
+ * menu). Applies live and stores it in the desk's context so a switch
+ * away and back keeps it; the config save then persists it per desk.
+ * An empty path removes the wallpaper (back to pattern/colour).
+ */
+
+void dsk_wall_set(const char *path, _WORD mode)
+{
+	strsncpy(options.wallp, path ? path : "", sizeof(options.wallp));
+	options.wallm = mode ? 1 : 0;
+
+	dsk_ctx[dsk_cur].wallm = options.wallm;
+	strcpy(dsk_ctx[dsk_cur].wallp, options.wallp);
+
+	bk_drop();
+	bk_init();
+	regen_desktop(desktop);
+	redraw_desk(&xd_desk);
+}
+
+
+/*
+ * Config-save consistency for desk 0's wallpaper. The 'wall'/'walm'
+ * keys (options group, saved BEFORE the per-desk deskicons group) bind
+ * to options.wallp, which holds the CURRENT desk's live value - so on
+ * any desk but 0 they would save the wrong image. _begin() flushes the
+ * current desk's live wallpaper into its own context and then loads
+ * desk 0's stored value into options for the save; _end() restores the
+ * live value afterwards. No bk_init between them, so nothing on screen
+ * changes. Called from opt_config() around its CfgSave.
+ */
+
+static _WORD dsk_wsave_m;
+static VLNAME dsk_wsave_p;
+
+void dsk_wall_save_begin(void)
+{
+	dsk_ctx[dsk_cur].wallm = options.wallm;
+	strcpy(dsk_ctx[dsk_cur].wallp, options.wallp);
+
+	dsk_wsave_m = options.wallm;
+	strcpy(dsk_wsave_p, options.wallp);
+
+	options.wallm = dsk_ctx[0].wallm;
+	strcpy(options.wallp, dsk_ctx[0].wallp);
+}
+
+void dsk_wall_save_end(void)
+{
+	options.wallm = dsk_wsave_m;
+	strcpy(options.wallp, dsk_wsave_p);
 }
 
 

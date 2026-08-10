@@ -50,6 +50,9 @@ bool dsk_init(void);
 void dsk_switch(_WORD desk);
 _WORD dsk_current(void);
 void dsk_sweep(void);					/* full-screen redraw broadcast */
+void dsk_wall_set(const char *path, _WORD mode);	/* current desk's wallpaper */
+void dsk_wall_save_begin(void);			/* config-save desk-0 wallpaper fixup */
+void dsk_wall_save_end(void);
 _WORD dsk_load(XFILE *file);
 void dsk_default(void);
 void dsk_close(void);

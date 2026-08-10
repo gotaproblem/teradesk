@@ -914,7 +914,12 @@ static void opt_config(XFILE *file, int lvl, int io, int *error)
 		options.version = CFG_VERSION;
 		get_set_video(0);				/* get current video mode */
 
+		/* Bespoke: make 'wall'/'walm' save desk 0's wallpaper even when
+		 * another desk is current (they bind to the live options) */
+
+		dsk_wall_save_begin();
 		*error = CfgSave(file, Options_table, lvl, TRUE);	/* save empty/0 fields as well  */
+		dsk_wall_save_end();
 	} else
 	{
 		/* Initialize options structure to zero, then default, then load options */

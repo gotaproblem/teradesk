@@ -750,7 +750,7 @@ void mn_toggle(void)
 /* ---- the PiSTorm system-tasks menu -------------------------------------- */
 
 #define SM_KIND			(NAME | CLOSER | MOVER)
-#define SM_NITEMS		3
+#define SM_NITEMS		4
 #define SM_COLS			16
 
 typedef struct
@@ -764,8 +764,64 @@ static char sm_title[] = " PiSTorm System ";
 static char *sm_items[SM_NITEMS] = {
 	"Task Manager",
 	"Recover GUI",
-	"Sweep screen"
+	"Sweep screen",
+	"Set wallpaper"
 };
+
+
+/*
+ * Choose a wallpaper for the CURRENT desktop via the file selector,
+ * then ask stretch-vs-fit; an image applies live and is remembered per
+ * desk. The alert also offers to remove the current wallpaper.
+ */
+
+static void sm_wallpaper(void)
+{
+	char *path;
+	VLNAME name;
+	VLNAME start;
+	_WORD b;
+
+	/* [Choose] a new image, [Remove] the current one, or [Cancel] */
+
+	b = form_alert(1, "[2][Desktop wallpaper|for this desk][Choose|Remove|Cancel]");
+
+	if (b == 3)
+		return;
+
+	if (b == 2)
+	{
+		dsk_wall_set("", 0);			/* remove */
+		return;
+	}
+
+	/* start the selector in the current wallpaper's folder, or the
+	 * bespoke default S:\BG (the hostfs share the installer populates) */
+
+	if (options.wallp[0] != 0)
+		strsncpy(start, options.wallp, sizeof(start));
+	else
+		strcpy(start, "S:\\BG\\*.JPG");
+
+	name[0] = 0;
+
+	path = xfileselector(start, name, "Desktop wallpaper");
+
+	if (path == NULL)
+		return;
+
+	if (name[0] != 0)
+	{
+		/* stretch to fill, or fit keeping aspect */
+
+		b = form_alert(2, "[1][Scale the wallpaper|to the screen how?][Stretch|Fit|Cancel]");
+
+		if (b != 3)
+			dsk_wall_set(path, (b == 2) ? 1 : 0);
+	}
+
+	free(path);
+}
 
 
 static void sm_contents(GRECT *work)
@@ -878,6 +934,9 @@ static void sm_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 		break;
 	case 2:
 		dsk_sweep();					/* full-screen redraw broadcast */
+		break;
+	case 3:
+		sm_wallpaper();					/* set this desk's wallpaper */
 		break;
 	default:
 		break;
