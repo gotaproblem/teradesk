@@ -38,6 +38,7 @@ void tb_apply(void);					/* open bar / return space, per options.tbar */
 void tb_tick(void);						/* 500 ms timer callback from evntloop() */
 void tb_close(void);					/* close the bar window at shutdown */
 long tb_psget(long index);				/* PSCTRL PS_GETINT; -1 if absent */
+void tb_psfx(long dir);					/* desk-slide: 1 = old exits left */
 
 /* Hover (mouse-rectangle) support; XDEVENT from xdialog.h */
 

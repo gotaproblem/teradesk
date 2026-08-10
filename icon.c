@@ -50,6 +50,7 @@
 #include "applik.h"
 #include "rsc_load.h"
 #include "bkgimg.h"
+#include "taskbar.h"					/* tb_psfx: desk-slide transition */
 
 
 typedef enum
@@ -3261,6 +3262,13 @@ void dsk_switch(_WORD k)
 		xform_error(ENOMEM);
 		return;
 	}
+
+	/* Fire the host-side slide transition BEFORE anything repaints, so
+	 * the emulator's snapshot is the pristine old desk. Direction
+	 * matches the pager's spatial order: to a higher desk the old
+	 * screen exits left. No-op without the emulator-side support. */
+
+	tb_psfx((k > dsk_cur) ? 1L : 2L);
 
 	bk_drop();
 	dsk_ctx_adopt(k);

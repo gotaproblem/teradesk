@@ -162,6 +162,19 @@ long tb_psget(long index)
 
 
 /*
+ * Fire the host-side desk-slide transition (PSCTRL subop 2).
+ * dir 1 = old desk exits left (moving to a higher desk), 2 = mirrored.
+ * Harmless no-op without PSCTRL or on an emulator without the subop.
+ */
+
+void tb_psfx(long dir)
+{
+	if (tb_psid != 0)
+		tb_nf->call(tb_psid | 2L, dir);
+}
+
+
+/*
  * Set the GEMDOS clock from the Pi's (NTP-synced) wall clock. The
  * Atari has no battery RTC, so without this the system time counts
  * from 00:00 at power-on - wrong on the taskbar and on every file
