@@ -762,7 +762,7 @@ static WINDOW *sm_win = NULL;
 static char sm_title[] = " PiSTorm System ";
 static char sm_titlebuf[28];			/* " APJ-OS v0.1.1 " when known */
 
-static char *sm_items[SM_NITEMS] = {
+static const char *const sm_items[SM_NITEMS] = {
 	"Task Manager",
 	"Recover GUI",
 	"Sweep screen",
