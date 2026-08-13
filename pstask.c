@@ -1309,6 +1309,21 @@ static void st_open(void)
 
 	st_sup = (st_get(6) > 0) ? 1 : 0;
 
+	/* TEMPORARY DIAGNOSTIC - REVERT AFTER FIELD READING. Shows the raw
+	 * kernel reply to the support probe:  >=1 opcodes present (page bug
+	 * if rows still read n/a) - 0 kernel without opcodes 106/107 (an
+	 * old xaaes km is what booted) - anything else: report it. */
+	{
+		char a[48];
+		char n[8];
+
+		ltoa((long) st_get(6), n, 10);
+		strcpy(a, "[1][Settings probe|GET(wheel) = ");
+		strcat(a, n);
+		strcat(a, "][ OK ]");
+		form_alert(1, a);
+	}
+
 	/* refresh the cache from the kernel's live values */
 
 	if (st_sup)
