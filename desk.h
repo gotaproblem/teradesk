@@ -185,13 +185,14 @@ typedef struct
 	_WORD thm;					/* Bespoke UI theme index (0 = GEM Grey) */
 	_WORD wscfg[9];				/* live UI config cache, indexed by XaAES
 								   ws_cfg id 1..8; WSCFG_UNSET = never set */
+	VLNAME psdir;				/* directory scanned for the PiSTorm menu */
+	VLNAME wallp;				/* wallpaper image path (PNG/JPG) */
+} Options;
+
 /* sentinel: this ws_cfg slot has never been set by the settings page */
 #define WSCFG_UNSET (-32768)
 
 void opt_save_default(void);		/* save config to the default file (main.c) */
-	VLNAME psdir;				/* directory scanned for the PiSTorm menu */
-	VLNAME wallp;				/* wallpaper image path (PNG/JPG) */
-} Options;
 
 
 typedef struct
