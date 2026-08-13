@@ -1612,8 +1612,9 @@ void tb_tick(void)
 
 		if (tip_kind == 1)
 			tip_uptime_lines();
-		else
+		else if (tip_kind == 2)
 			tip_throttle_lines();
+		/* kind 3 (component versions) is static - never rebuilt */
 
 		diff = (tip_nlines != n);
 
