@@ -190,6 +190,14 @@ static CfgEntry const Options_table[] = {
 	CFG_S("wall", options.wallp),	/* wallpaper image (PNG/JPG) */
 	CFG_D("walm", options.wallm),	/* wallpaper mode: 0 stretch, 1 fit */
 	CFG_D("thm", options.thm),		/* Bespoke UI theme index */
+	/* settings page: live XaAES UI config (ws_cfg ids; WSCFG_UNSET = unset) */
+	CFG_D("wsc1", options.wscfg[1]),	/* drag past top    */
+	CFG_D("wsc2", options.wscfg[2]),	/* outline moves    */
+	CFG_D("wsc3", options.wscfg[3]),	/* frame width      */
+	CFG_D("wsc4", options.wscfg[4]),	/* thin work border */
+	CFG_D("wsc6", options.wscfg[6]),	/* wheel step       */
+	CFG_D("wsc7", options.wscfg[7]),	/* popup delay      */
+	CFG_D("wsc8", options.wscfg[8]),	/* keep left onscr  */
 
 	CFG_ENDG(),
 	CFG_LAST()
@@ -867,6 +875,13 @@ static void opt_default(void)
 	options.tbar = 1;					/* Bespoke Desktop: taskbar on */
 	options.wallm = 1;					/* Bespoke Desktop: wallpaper fits */
 
+	{
+		_WORD i;
+
+		for (i = 0; i < 9; i++)
+			options.wscfg[i] = WSCFG_UNSET;	/* settings page: never set */
+	}
+
 	/*
 	 * There is no need to set options.sort, .mode, .sexit, .dsk_pattern,
 	 * .dsk_colour, .win_pattern and .win_colour  because all of options
@@ -1090,6 +1105,15 @@ static void save_options(const char *fname)
  * Save configuration into an explicitely specified config file
  * (file selector is opened to specify the file)
  */
+
+/* Save the configuration to the default file - the settings page's
+ * [Save settings] row (pstask.c) uses this, same as the menu item. */
+
+void opt_save_default(void)
+{
+	save_options(definfname);
+}
+
 
 static void save_options_as(void)
 {

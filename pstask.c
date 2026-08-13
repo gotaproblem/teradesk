@@ -737,7 +737,7 @@ void mn_toggle(void)
 /* ---- the PiSTorm system-tasks menu -------------------------------------- */
 
 #define SM_KIND			(NAME | CLOSER | MOVER)
-#define SM_NITEMS		4
+#define SM_NITEMS		5
 #define SM_COLS			16
 
 typedef struct
@@ -753,8 +753,11 @@ static const char *const sm_items[SM_NITEMS] = {
 	"Task Manager",
 	"Recover GUI",
 	"Sweep screen",
-	"Set wallpaper"
+	"Set wallpaper",
+	"Settings ..."
 };
+
+static void st_open(void);				/* the settings page, below */
 
 
 /*
@@ -926,6 +929,9 @@ static void sm_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 	case 3:
 		sm_wallpaper();					/* set this desk's wallpaper */
 		break;
+	case 4:
+		st_open();						/* the live settings page */
+		break;
 	default:
 		break;
 	}
@@ -1028,4 +1034,340 @@ void sm_toggle(void)
 	/* sticky on all workspaces, like the bar it belongs to */
 
 	appl_control(-1, 103, (void *) (long) xw_handle(sm_win));
+}
+
+
+/* ------------------------------------------------------------------------- */
+/* 3. The Settings page (st_*), opened from the system menu.                 */
+/*                                                                           */
+/* Live UI configuration: the XaAES rows talk to the kernel through the      */
+/* bespoke appl_control opcodes 106 GET / 107 SET (ws_cfg_get/ws_cfg_apply   */
+/* in c_window.c) and apply IMMEDIATELY - no reboot. The taskbar rows are    */
+/* TeraDesk-local. Values live in options.wscfg[] / options.tbtf/tbdf and    */
+/* persist through teradesk.inf ([Save settings] row); ws_startup_push()     */
+/* re-applies the saved XaAES values at every desktop start, so xaaes.cnf    */
+/* is never touched.                                                         */
+/* ------------------------------------------------------------------------- */
+
+#define ST_COLS			26
+#define ST_NWS			7				/* XaAES rows */
+#define ST_ROW_CLOCK	ST_NWS			/* taskbar clock format */
+#define ST_ROW_DATE		(ST_NWS + 1)	/* taskbar date format  */
+#define ST_ROW_SAVE		(ST_NWS + 2)	/* persist to teradesk.inf */
+#define ST_NROWS		(ST_NWS + 3)
+
+typedef struct
+{
+	XW_INTVARS;
+} ST_WINDOW;
+
+static WINDOW *st_win = NULL;
+static char st_title[] = " Settings ";
+static _WORD st_sup = 0;				/* kernel has opcodes 106/107 */
+
+typedef struct
+{
+	short id;							/* XaAES ws_cfg id */
+	const char *name;					/* 16-char row label */
+	const short *vals;					/* click cycles through these */
+	short nv;
+} STWS;
+
+static const short st_bool[] = { 0, 1 };
+static const short st_frame[] = { -1, 1, 2, 3 };
+static const short st_wheel[] = { 1, 2, 4, 8, 16 };
+static const short st_pop[] = { 0, 1, 2, 5, 10 };
+
+static const STWS st_ws[ST_NWS] = {
+	{ 1, "Drag past top   ", st_bool,  2 },
+	{ 2, "Outline moves   ", st_bool,  2 },
+	{ 8, "Keep left onscrn", st_bool,  2 },
+	{ 3, "Frame width     ", st_frame, 4 },
+	{ 4, "Thin work border", st_bool,  2 },
+	{ 6, "Wheel step      ", st_wheel, 5 },
+	{ 7, "Popup delay     ", st_pop,   5 }
+};
+
+
+static _WORD st_get(short id)
+{
+	return appl_control(-1, 106, (void *) (long) id);
+}
+
+static _WORD st_set(short id, short val)
+{
+	return appl_control(-1, 107,
+		(void *) ((((long) id) << 16) | ((long) val & 0xFFFFL)));
+}
+
+
+/* the value text for one row */
+
+static void st_valstr(_WORD row, char *out)
+{
+	if (row < ST_NWS)
+	{
+		_WORD v = options.wscfg[st_ws[row].id];
+
+		if (!st_sup)
+			strcpy(out, "n/a");
+		else if (st_ws[row].vals == st_bool)
+			strcpy(out, v ? "on" : "off");
+		else if (st_ws[row].vals == st_frame && v < 0)
+			strcpy(out, "thin");
+		else
+			ltoa((long) v, out, 10);
+	} else if (row == ST_ROW_CLOCK)
+		strcpy(out, options.tbtf ? "12h" : "24h");
+	else if (row == ST_ROW_DATE)
+		strcpy(out, (options.tbdf == 0) ? "Thu 6 Aug" :
+					(options.tbdf == 1) ? "Thu Aug 6" : "off");
+	else
+		out[0] = 0;
+}
+
+
+static void st_contents(GRECT *work)
+{
+	char l[ST_COLS + 4];
+	char val[16];
+	char *p;
+	_WORD i;
+
+	tb_popup_font();
+
+	for (i = 0; i < ST_NROWS; i++)
+	{
+		if (i == ST_ROW_SAVE)
+			p = mn_pads(l, "[ Save settings ]", 17);
+		else
+		{
+			st_valstr(i, val);
+
+			if (i == ST_ROW_CLOCK)
+				p = mn_pads(l, "Clock format    ", 16);
+			else if (i == ST_ROW_DATE)
+				p = mn_pads(l, "Date format     ", 16);
+			else
+				p = mn_pads(l, st_ws[i].name, 16);
+
+			p = mn_pads(p, ": ", 2);
+			p = mn_pads(p, val, (_WORD) strlen(val));
+		}
+
+		p = mn_pads(p, "", (_WORD) (ST_COLS - (_WORD) (p - l)));
+		*p = 0;
+
+		mn_text(work, 0, i, l);
+	}
+}
+
+
+static void st_draw(WINDOW *w, GRECT *area)
+{
+	GRECT r1, r2, in, work;
+
+	(void) area;
+
+	if (st_win == NULL)
+		return;
+
+	xw_getwork(st_win, &work);
+	r1 = work;
+
+	xd_begupdate();
+	xd_mouse_off();
+	xw_getfirst(st_win, &r2);
+
+	while (r2.g_w != 0 && r2.g_h != 0)
+	{
+		if (xd_rcintersect(&r1, &r2, &in))
+		{
+			xd_clip_on(&in);
+			clr_object(&work, G_WHITE, -1);
+			st_contents(&work);
+			xd_clip_off();
+		}
+
+		xw_getnext(st_win, &r2);
+	}
+
+	xd_mouse_on();
+	xd_endupdate();
+
+	(void) w;
+}
+
+
+void st_close(void)
+{
+	if (st_win != NULL)
+	{
+		xw_close(st_win);
+		xw_delete(st_win);
+		st_win = NULL;
+	}
+}
+
+
+static void st_closed(WINDOW *w, _WORD mode)
+{
+	(void) w;
+	(void) mode;
+	st_close();
+}
+
+
+/* a row was clicked: cycle its value and apply live */
+
+static void st_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD kstate)
+{
+	GRECT work;
+	_WORD row;
+
+	(void) w;
+	(void) x;
+	(void) n;
+	(void) bstate;
+	(void) kstate;
+
+	xw_getwork(st_win, &work);
+	row = (_WORD) ((y - work.g_y - MN_VPAD) / mn_font.ch);
+
+	if (row < 0 || row >= ST_NROWS)
+		return;
+
+	if (row < ST_NWS)
+	{
+		const STWS *r = &st_ws[row];
+		_WORD cur, i, next;
+
+		if (!st_sup)
+			return;
+
+		cur = options.wscfg[r->id];
+		next = r->vals[0];
+
+		for (i = 0; i < r->nv; i++)
+			if (r->vals[i] == cur)
+			{
+				next = r->vals[(i + 1) % r->nv];
+				break;
+			}
+
+		if (st_set(r->id, next) == 1)
+			options.wscfg[r->id] = next;
+	} else if (row == ST_ROW_CLOCK)
+		options.tbtf = options.tbtf ? 0 : 1;
+	else if (row == ST_ROW_DATE)
+		options.tbdf = (_WORD) ((options.tbdf + 1) % 3);
+	else if (row == ST_ROW_SAVE)
+	{
+		opt_save_default();
+		return;							/* nothing on-page changes */
+	}
+
+	st_draw(st_win, NULL);
+}
+
+
+static WD_FUNC st_functions = {
+	0L,									/* handle keypress */
+	st_button,							/* handle button */
+	st_draw,							/* redraw */
+	xw_nop1,							/* topped */
+	xw_nop1,							/* bottomed */
+	xw_nop1,							/* newtop */
+	st_closed,							/* closed */
+	0L,									/* fulled */
+	xw_nop2,							/* arrowed */
+	0L,									/* hslid */
+	0L,									/* vslid */
+	0L,									/* sized */
+	0L,									/* moved */
+	0L,									/* hndlmenu */
+	0L,									/* top */
+	0L,									/* iconify */
+	0L									/* uniconify */
+};
+
+
+static void st_open(void)
+{
+	GRECT wrk, size;
+	int error;
+	_WORD i;
+
+	if (st_win != NULL)
+	{
+		xw_set_topbot(st_win, WF_TOP);
+		return;
+	}
+
+	/* support probe: wheel amount is >= 1 on any real configuration,
+	 * so a kernel without opcode 106 cannot fake it */
+
+	st_sup = (st_get(6) > 0) ? 1 : 0;
+
+	/* refresh the cache from the kernel's live values */
+
+	if (st_sup)
+		for (i = 0; i < ST_NWS; i++)
+			options.wscfg[st_ws[i].id] = st_get(st_ws[i].id);
+
+	mn_setfont();
+
+	wrk.g_x = xd_desk.g_x;
+	wrk.g_y = xd_desk.g_y;
+	wrk.g_w = (ST_COLS + 2) * mn_font.cw + 2 * MN_HPAD;
+	wrk.g_h = ST_NROWS * mn_font.ch + 2 * MN_VPAD;
+
+	wind_calc_grect(WC_BORDER, SM_KIND, &wrk, &size);
+
+	size.g_x = xd_desk.g_x;
+	size.g_y = xd_desk.g_y + xd_desk.g_h - size.g_h;
+
+	st_win = xw_create(ST_WIND, &st_functions, SM_KIND, &size, sizeof(ST_WINDOW), NULL, &error);
+
+	if (st_win == NULL)
+	{
+		xform_error(error);
+		return;
+	}
+
+	wind_set_str(xw_handle(st_win), WF_NAME, st_title);
+	xw_open(st_win, &size);
+
+	/* one-click rows, sticky on all workspaces - like the system menu */
+
+#ifndef WF_BEVENT
+#define WF_BEVENT 24
+#endif
+	wind_set(xw_handle(st_win), WF_BEVENT, 1, 0, 0, 0);
+	appl_control(-1, 103, (void *) (long) xw_handle(st_win));
+}
+
+
+/*
+ * Re-apply the saved XaAES settings at desktop start (called once from
+ * tb_apply). TeraDesk owns persistence: teradesk.inf carries the values
+ * and pushes them into the kernel here - xaaes.cnf is never touched.
+ */
+
+void ws_startup_push(void)
+{
+	static _WORD done = 0;
+	_WORD i;
+
+	if (done)
+		return;
+	done = 1;
+
+	for (i = 0; i < ST_NWS; i++)
+	{
+		_WORD v = options.wscfg[st_ws[i].id];
+
+		if (v != WSCFG_UNSET)
+			st_set(st_ws[i].id, v);
+	}
 }

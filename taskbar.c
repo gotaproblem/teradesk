@@ -1421,6 +1421,10 @@ static void tb_open(void)
 
 void tb_apply(void)
 {
+	/* settings page: push the saved XaAES UI config into the kernel
+	 * (once per session; no-op for values never set) */
+	ws_startup_push();
+
 	if (options.tbar != 0)
 	{
 		/*
@@ -1652,6 +1656,7 @@ void tb_close(void)
 	tip_close();						/* the tooltip, */
 	mn_close();							/* the JIT panel, */
 	sm_close();							/* and the system menu too */
+	st_close();							/* and the settings page */
 
 	if (tb_window != NULL)
 	{
