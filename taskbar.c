@@ -36,6 +36,7 @@
 #include "font.h"
 #include "screen.h"
 #include "main.h"
+#include "version.h"
 #include "window.h"
 #include "icon.h"
 #include "btheme.h"
@@ -118,6 +119,7 @@ static GRECT tb_clockr;						/* screen rect of the clock cell */
 #define TB_HOV_CLOCK	1
 #define TB_HOV_TEMP		2
 #define TB_HOV_JIT		3
+#define TB_HOV_APJ		4
 
 static _WORD tb_hovin = 0;					/* 0 = mouse outside bar, 1 = inside */
 static GRECT tb_hovrect;					/* rect currently watched by MU_M1 */
@@ -366,6 +368,26 @@ static void tb_setfont(void)
 
 	tb_cw = celw;
 	tb_ch = celh;
+}
+
+
+/*
+ * The popups (JIT panel, system menu - pstask.c) follow the BAR font,
+ * the same size the hover tooltips use. Field feedback: the directory-
+ * window font they used before was too small on a 1080p desktop.
+ */
+
+void tb_popup_font(void)
+{
+	tb_setfont();
+}
+
+
+void tb_popup_metrics(_WORD *cw, _WORD *ch)
+{
+	tb_setfont();
+	*cw = tb_cw;
+	*ch = tb_ch;
 }
 
 
@@ -880,6 +902,80 @@ static void tip_throttle(void)
 	tip_kind = 2;
 	tip_minw = 26;						/* "Under-voltage : since boot" */
 	tip_show(&tb_tempr);
+}
+
+
+/*
+ * The component-versions tooltip over the APJ-OS cell: the key
+ * ingredients of the distribution and their versions. Static content -
+ * filled once at open, no live rebuild (tip_kind 3 is skipped by the
+ * live-update block in tb_tick).
+ */
+
+#define TB_C_MINT	0x4D694E54L			/* 'MiNT' cookie */
+
+static char *tip_hexver(char *p, _WORD v)
+{
+	/* hex-coded version word, e.g. 0x0119 -> "1.19" */
+	ltoa((long) ((v >> 8) & 0xFF), p, 16);
+	p += strlen(p);
+	*p++ = '.';
+	if ((v & 0xFF) < 0x10)
+		*p++ = '0';
+	ltoa((long) (v & 0xFF), p, 16);
+	return p + strlen(p);
+}
+
+static void tip_versions_lines(void)
+{
+	long mv;
+	char *p;
+
+	tip_nlines = 0;
+
+	p = tb_app(tip_lines[tip_nlines], "APJ-OS   : ");
+	strcpy(p, tb_apjver[0] ? tb_apjver : "unknown");
+	tip_nlines++;
+
+	/* TeraDesk: version.h's own banner, e.g. "Tera Desktop V4.08 ..."
+	 * (bounded copy by hand - strncpy trips -Werror=stringop-truncation
+	 * on the cross-compiler) */
+	{
+		const char *v = INFO_VERSION;
+		_WORD i;
+
+		for (i = 0; i < TIP_MAXLEN - 1 && v[i]; i++)
+			tip_lines[tip_nlines][i] = v[i];
+		tip_lines[tip_nlines][i] = 0;
+	}
+	tip_nlines++;
+
+	if (find_cookie(TB_C_MINT, &mv))
+	{
+		p = tb_app(tip_lines[tip_nlines], "FreeMiNT : ");
+		tip_hexver(p, (_WORD) mv);
+		tip_nlines++;
+	}
+
+	p = tb_app(tip_lines[tip_nlines], "AES      : ");
+	p = tip_hexver(p, aes_version);
+	strcpy(p, " (XaAES)");
+	tip_nlines++;
+
+	p = tb_app(tip_lines[tip_nlines], "TOS      : ");
+	tip_hexver(p, tos_version);
+	tip_nlines++;
+}
+
+static void tip_versions(void)
+{
+	if (tip_win != NULL)
+		return;
+
+	tip_versions_lines();
+	tip_kind = 3;
+	tip_minw = 0;
+	tip_show(&tb_apjr);
 }
 
 
@@ -1423,6 +1519,12 @@ void tb_hover(_WORD x, _WORD y)
 		{
 			tgt = TB_HOV_TEMP;
 			tb_hovrect = tb_tempr;
+		} else if (tb_apjr.g_w > 0 &&
+			x >= tb_apjr.g_x && x < tb_apjr.g_x + tb_apjr.g_w &&
+			y >= tb_apjr.g_y && y < tb_apjr.g_y + tb_apjr.g_h)
+		{
+			tgt = TB_HOV_APJ;
+			tb_hovrect = tb_apjr;
 		} else
 		{
 			/* dead space: watch a small box around the pointer */
@@ -1489,6 +1591,8 @@ void tb_tick(void)
 				tip_uptime();
 			else if (tb_hovtgt == TB_HOV_TEMP)
 				tip_throttle();
+			else if (tb_hovtgt == TB_HOV_APJ)
+				tip_versions();
 		}
 	}
 

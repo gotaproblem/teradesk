@@ -38,6 +38,8 @@ void tb_apply(void);					/* open bar / return space, per options.tbar */
 void tb_tick(void);						/* 500 ms timer callback from evntloop() */
 void tb_close(void);					/* close the bar window at shutdown */
 long tb_psget(long index);				/* PSCTRL PS_GETINT; -1 if absent */
+void tb_popup_font(void);				/* set VDI text to the BAR font */
+void tb_popup_metrics(_WORD *cw, _WORD *ch);	/* bar font cell metrics */
 void tb_psfx(long dir);					/* desk-slide: 1 = old exits left */
 char *tb_apjtitle(void);				/* "APJ-OS v0.1.1" or NULL */
 

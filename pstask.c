@@ -63,7 +63,6 @@
 
 #define MN_COLS			44				/* window text columns */
 #define MN_DEFROWS		11				/* total content rows */
-#define MN_MINPT		9				/* smallest font: 9 points */
 #define MN_KIND			(NAME | CLOSER | MOVER)
 
 /* Margins between the window frame and the content, so text never
@@ -85,35 +84,23 @@ typedef struct
 static WINDOW *mn_win = NULL;
 static char mn_title[] = " PiSTorm JIT ";
 
-static XDFONT mn_font;					/* the window font, min. MN_MINPT points */
-static _WORD mn_req_id = -1;			/* last requested font id/size */
-static _WORD mn_req_pt = -1;
+static XDFONT mn_font;					/* layout metrics: the BAR font */
 static _WORD mn_used_ch = 0;			/* metrics the open window was sized for */
 static _WORD mn_used_cw = 0;
 
 
 /*
- * Select the monitor font: the user's directory-window font (set through
- * TeraDesk's window-font dialog, saved in the config), clamped to at
- * least MN_MINPT points so the display stays legible.
+ * Select the popup font: the taskbar's own font (see tb_popup_metrics).
  */
 
 static void mn_setfont(void)
 {
-	_WORD want = dir_font.size;
-
-	if (want < MN_MINPT)
-		want = MN_MINPT;
-
-	if (dir_font.id != mn_req_id || want != mn_req_pt)
-	{
-		mn_req_id = dir_font.id;
-		mn_req_pt = want;
-
-		fnt_setfont(dir_font.id, want, &mn_font);
-		mn_font.colour = dir_font.colour;
-		mn_font.effects = dir_font.effects;
-	}
+	/* The popups follow the BAR font - the same size the throttle and
+	 * uptime tooltips use. Field feedback: the directory-window font
+	 * used before was too small on a 1080p desktop. */
+	tb_popup_metrics(&mn_font.cw, &mn_font.ch);
+	mn_font.colour = G_BLACK;
+	mn_font.effects = 0;
 }
 
 static long sv_phystop, sv_ramtop, sv_ramvalid;
@@ -449,7 +436,7 @@ static void mn_contents(GRECT *work)
 	char v[MN_COLS];
 	char *p;
 
-	set_txt_default(&mn_font);
+	tb_popup_font();
 
 	/* the engine block */
 
@@ -831,7 +818,7 @@ static void sm_contents(GRECT *work)
 	char *p;
 	_WORD i;
 
-	set_txt_default(&mn_font);
+	tb_popup_font();
 
 	for (i = 0; i < SM_NITEMS; i++)
 	{
