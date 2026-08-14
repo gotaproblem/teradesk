@@ -1050,12 +1050,13 @@ void sm_toggle(void)
 /* is never touched.                                                         */
 /* ------------------------------------------------------------------------- */
 
-#define ST_COLS			26
+#define ST_COLS			28
 #define ST_NWS			7				/* XaAES rows */
 #define ST_ROW_CLOCK	ST_NWS			/* taskbar clock format */
 #define ST_ROW_DATE		(ST_NWS + 1)	/* taskbar date format  */
-#define ST_ROW_SAVE		(ST_NWS + 2)	/* persist to teradesk.inf */
-#define ST_NROWS		(ST_NWS + 3)
+#define ST_ROW_THEME	(ST_NWS + 2)	/* Bespoke UI theme     */
+#define ST_ROW_SAVE		(ST_NWS + 3)	/* persist to teradesk.inf */
+#define ST_NROWS		(ST_NWS + 4)
 
 typedef struct
 {
@@ -1123,6 +1124,8 @@ static void st_valstr(_WORD row, char *out)
 	else if (row == ST_ROW_DATE)
 		strcpy(out, (options.tbdf == 0) ? "Thu 6 Aug" :
 					(options.tbdf == 1) ? "Thu Aug 6" : "off");
+	else if (row == ST_ROW_THEME)
+		strcpy(out, bt_name(bt_current()));
 	else
 		out[0] = 0;
 }
@@ -1149,6 +1152,8 @@ static void st_contents(GRECT *work)
 				p = mn_pads(l, "Clock format    ", 16);
 			else if (i == ST_ROW_DATE)
 				p = mn_pads(l, "Date format     ", 16);
+			else if (i == ST_ROW_THEME)
+				p = mn_pads(l, "UI theme        ", 16);
 			else
 				p = mn_pads(l, st_ws[i].name, 16);
 
@@ -1262,6 +1267,14 @@ static void st_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 		options.tbtf = options.tbtf ? 0 : 1;
 	else if (row == ST_ROW_DATE)
 		options.tbdf = (_WORD) ((options.tbdf + 1) % 3);
+	else if (row == ST_ROW_THEME)
+	{
+		_WORD v = (_WORD) ((bt_current() + 1) % bt_count());
+
+		bt_use(v);
+		options.thm = v;
+		dsk_sweep();					/* re-skin: bar, panels, all of it */
+	}
 	else if (row == ST_ROW_SAVE)
 	{
 		opt_save_default();
