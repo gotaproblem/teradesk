@@ -1274,6 +1274,9 @@ static void st_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 		bt_use(v);
 		options.thm = v;
 		dsk_sweep();					/* re-skin: bar, panels, all of it */
+		menu_bar(menu, 1);				/* the sweep does not repaint the
+										 * menu bar - re-install it so it
+										 * picks up the new chrome pens */
 	}
 	else if (row == ST_ROW_SAVE)
 	{
