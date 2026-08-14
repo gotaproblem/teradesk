@@ -41,6 +41,7 @@
 #include "showinfo.h"
 #include "dir.h"
 #include "icon.h"
+#include "btheme.h"
 #include "icontype.h"
 #include "prgtype.h"
 #include "screen.h"
@@ -1732,6 +1733,8 @@ static _WORD add_icon(ITMTYPE type, ITMTYPE tgttype, bool link, _WORD icon, cons
 					break;
 				}
 
+				h->monoblk.ib_char = bt_labelchar(h->monoblk.ib_char);
+
 				objc_add(desktop, 0, i + 1);
 
 				if (draw)
@@ -2261,6 +2264,7 @@ static _WORD chng_icon(_WORD object)
 		*h = *icons[icon_no].ob_spec.ciconblk;
 		h->monoblk.ib_ptext = icn->label;
 		h->monoblk.ib_char &= 0xFF00;
+		h->monoblk.ib_char = bt_labelchar(h->monoblk.ib_char);
 
 		icn->item_type = get_icntype();	/* get icontype from the dialog */
 
@@ -2541,6 +2545,36 @@ static _WORD dsk_hndlkey(WINDOW *w, _WORD dummy_scancode, _WORD dummy_keystate)
 /*
  * (Re)generate desktop and draw menu bar
  */
+/*
+ * Re-stamp every desktop icon's label colours for the active theme
+ * (called from bt_use, so both the startup theme application and a
+ * live switch update the labels in place). The original colour byte
+ * is taken back from the icon's source resource each time, so cycling
+ * to GEM Grey restores the classic look exactly.
+ */
+
+void icn_theme_labels(void)
+{
+	ICON *icn = desk_icons;
+	_WORD i;
+
+	if (icn == NULL)
+		return;
+
+	for (i = 0; i < max_icons; i++, icn++)
+	{
+		if (icn->item_type != ITM_NOTUSED)
+		{
+			CICONBLK *h = desktop[i + 1].ob_spec.ciconblk;
+
+			h->monoblk.ib_char = bt_labelchar(
+				(_WORD) ((icons[icn->icon_index].ob_spec.ciconblk->monoblk.ib_char & 0xFF00) |
+						 (h->monoblk.ib_char & 0x00FF)));
+		}
+	}
+}
+
+
 void regen_desktop(OBJECT *desk_tree)
 {
 	wind_set_ptr_int(0, WF_NEWDESK, desk_tree, 0);

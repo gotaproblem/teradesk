@@ -4569,13 +4569,7 @@ void set_obji(OBJECT *obj, long i, long n, bool selected, bool hidden, bool link
 	cicnblk[i].monoblk.ib_ptext = name;
 	cicnblk[i].monoblk.ib_char &= 0xFF00;
 	cicnblk[i].monoblk.ib_char |= 0x20;
-
-	if (bt_themed())
-	{
-		/* label text in WHITE (fg colour nibble, bits 12-15; pen 0
-		 * is native white) so names stay readable on dark paper */
-		cicnblk[i].monoblk.ib_char &= 0x0FFF;
-	}
+	cicnblk[i].monoblk.ib_char = bt_labelchar(cicnblk[i].monoblk.ib_char);
 
 	objc_add(obj, 0, (_WORD) i + 1);
 }

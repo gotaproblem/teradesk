@@ -222,6 +222,8 @@ static void bt_resolve(void)
 
 void bt_use(_WORD id)
 {
+	void icn_theme_labels(void);		/* icon.c; avoids icon.h's include chain */
+
 	if (id < 0)
 		id = 0;
 	if (id >= NPRESETS)
@@ -229,6 +231,10 @@ void bt_use(_WORD id)
 
 	cur = id;
 	bt_resolve();
+
+	/* desktop icons exist by now (options and icons load before the
+	 * taskbar applies the saved theme) - restamp their label colours */
+	icn_theme_labels();
 }
 
 _WORD bt_current(void)
@@ -257,6 +263,27 @@ const BTHEME *bt(void)
 _WORD bt_themed(void)
 {
 	return presets[cur].pal;
+}
+
+/*
+ * Icon labels. FIELD LESSON 2: icon objects - artwork AND label text -
+ * are drawn by the AES (objc_draw), i.e. through XaAES's workstation
+ * and its themed chrome pens: a native BLACK label fg came out WHITE
+ * (chrome pen 1 = text) inside the label's opaque WHITE box (pen 0) -
+ * invisible everywhere. So themed labels use colours that read
+ * dark-on-light through EITHER workstation: fg = pen 9 (LBLACK: dark
+ * grey native, theme-dark under the chrome remap), bg = pen 0 (WHITE:
+ * white in both since the chrome push maps 0 to the light text
+ * colour). GEM Grey: the icon's own colours, untouched.
+ * ib_char layout: bits 15-12 fg, 11-8 bg, 7-0 character.
+ */
+
+_WORD bt_labelchar(_WORD c)
+{
+	if (presets[cur].pal)
+		return (_WORD) ((c & 0x00FF) | 0x9000);
+
+	return c;
 }
 
 
