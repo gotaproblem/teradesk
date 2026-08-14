@@ -38,6 +38,7 @@
 #include "icon.h"						/* dsk_sweep() */
 #include "dir.h"						/* mn_font: the user's window font */
 #include "taskbar.h"
+#include "btheme.h"
 #include "pstask.h"
 
 
@@ -99,7 +100,7 @@ static void mn_setfont(void)
 	 * uptime tooltips use. Field feedback: the directory-window font
 	 * used before was too small on a 1080p desktop. */
 	tb_popup_metrics(&mn_font.cw, &mn_font.ch);
-	mn_font.colour = G_BLACK;
+	mn_font.colour = bt()->text;
 	mn_font.effects = 0;
 }
 
@@ -310,11 +311,11 @@ static void mn_bar(GRECT *work, _WORD col, _WORD row, _WORD cols, _WORD p)
 	r.g_y = y0;
 	r.g_w = w;
 	r.g_h = h;
-	clr_object(&r, G_WHITE, -1);
+	clr_object(&r, bt()->paper, -1);
 
 	/* frame */
 
-	vsl_color(vdi_handle, G_BLACK);
+	vsl_color(vdi_handle, bt()->text);
 	f[0] = x0;
 	f[1] = y0;
 	f[2] = x0 + w - 1;
@@ -335,7 +336,7 @@ static void mn_bar(GRECT *work, _WORD col, _WORD row, _WORD cols, _WORD p)
 		r.g_y = y0 + 2;
 		r.g_w = fill;
 		r.g_h = h - 4;
-		clr_object(&r, G_BLACK, -1);
+		clr_object(&r, bt()->text, -1);
 	}
 }
 
@@ -529,7 +530,7 @@ static void mn_draw(GRECT *area)
 		if (xd_rcintersect(&r1, &r2, &in))
 		{
 			xd_clip_on(&in);
-			clr_object(&in, G_WHITE, -1);
+			clr_object(&in, bt()->paper, -1);
 			mn_contents(&work);
 			xd_clip_off();
 		}
@@ -855,7 +856,7 @@ static void sm_draw(GRECT *area)
 		if (xd_rcintersect(&r1, &r2, &in))
 		{
 			xd_clip_on(&in);
-			clr_object(&in, G_WHITE, -1);
+			clr_object(&in, bt()->paper, -1);
 			sm_contents(&work);
 			xd_clip_off();
 		}
@@ -1184,7 +1185,7 @@ static void st_draw(WINDOW *w, GRECT *area)
 		if (xd_rcintersect(&r1, &r2, &in))
 		{
 			xd_clip_on(&in);
-			clr_object(&work, G_WHITE, -1);
+			clr_object(&work, bt()->paper, -1);
 			st_contents(&work);
 			xd_clip_off();
 		}

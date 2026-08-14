@@ -50,9 +50,10 @@ typedef struct
 	_WORD sel_fg;		/* selected text                             */
 	_WORD alert_bg;		/* alert (throttle) fill                     */
 	_WORD alert_fg;		/* alert text                                */
-	_WORD panel;		/* window / panel background                 */
+	_WORD panel;		/* bar / chrome background                   */
 	_WORD title_bg;		/* panel title bar                           */
 	_WORD title_fg;		/* panel title text                          */
+	_WORD paper;		/* window + tooltip interior                 */
 	_WORD hpad;			/* text inset, px                            */
 	_WORD vpad;			/* cell top/bottom inset, px                 */
 	_WORD gap;			/* gap between cells, px                     */
@@ -65,7 +66,7 @@ typedef struct
 #define BT_RAISED	1	/* light top/left, dark bottom/right (buttons) */
 
 /* First of the reserved VDI colour registers a theme's RGB is loaded
- * into (11 consecutive). High enough to avoid the desktop's own low
+ * into (12 consecutive). High enough to avoid the desktop's own low
  * indices; the wallpaper is direct-RGB at truecolour, so untouched. */
 
 #define BT_PAL_BASE	240

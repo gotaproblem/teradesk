@@ -341,7 +341,7 @@ static void tb_drawcell(_WORD *x, char *text, bool raised, bool alert, bool sel)
 
 	vst_color(vdi_handle, fg);
 	w_transptext(*x + TB_HPAD, in.g_y + (in.g_h - tb_ch) / 2, text);
-	vst_color(vdi_handle, G_BLACK);
+	vst_color(vdi_handle, t->text);
 
 	*x += w + TB_GAP;
 }
@@ -365,6 +365,10 @@ static void tb_setfont(void)
 		want = def_font.ch;
 
 	vst_height(vdi_handle, want, &chw, &chh, &celw, &celh);
+
+	/* themed default text colour - the bar cells set their own per
+	 * cell, the popups/panels draw straight after this call */
+	vst_color(vdi_handle, bt()->text);
 
 	tb_cw = celw;
 	tb_ch = celh;
@@ -658,9 +662,9 @@ static void tip_draw(WINDOW *w, GRECT *area)
 		{
 			xd_clip_on(&in);
 
-			clr_object(&work, G_WHITE, -1);
+			clr_object(&work, bt()->paper, -1);
 
-			vsl_color(vdi_handle, G_BLACK);
+			vsl_color(vdi_handle, bt()->text);
 			f[0] = work.g_x;
 			f[1] = work.g_y;
 			f[2] = work.g_x + work.g_w - 1;
@@ -674,7 +678,7 @@ static void tip_draw(WINDOW *w, GRECT *area)
 			v_pline(vdi_handle, 5, f);
 
 			tb_setfont();
-			vst_color(vdi_handle, G_BLACK);
+			vst_color(vdi_handle, bt()->text);
 
 			/* one character cell of margin left/right, half a cell above
 			 * and below, and a little leading between lines - the box is
