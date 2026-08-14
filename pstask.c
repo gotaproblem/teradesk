@@ -1375,6 +1375,47 @@ static void st_open(void)
 
 
 /*
+ * Sanitize the loaded wscfg[] values against each row's legal list.
+ *
+ * WSCFG_UNSET (-32768) cannot survive TeraDesk's CFG_D round trip:
+ * CfgSave (emp=TRUE) writes it as _UWORD 32768, and on load atoi()'s
+ * 32768 is squeezed through max()'s 16-bit parameters - it becomes
+ * -32768 BEFORE the clamp, so max(-32768, 0) stores 0 (field-verified
+ * by disassembly of the shipped desktop.prg, 2026-08-14).  The push
+ * below then faithfully sent SET(id, 0) for every row on every boot,
+ * zeroing the kernel's live values (wheel step, popup delay...) before
+ * the desktop finished starting - which is how the settings page read
+ * "n/a" everywhere while both binaries were provably correct.
+ *
+ * Any value that is not in the row's click list becomes UNSET, so the
+ * push can only ever send values the page itself could have set, and
+ * a poisoned teradesk.inf heals itself on the next load.  (Known,
+ * accepted corner: a saved frame width of -1 also cannot round-trip
+ * CFG_D and comes back as 0 -> UNSET; -1 is the default anyway.)
+ */
+
+static void st_sanitize(void)
+{
+	_WORD i, j, v;
+
+	for (i = 0; i < ST_NWS; i++)
+	{
+		v = options.wscfg[st_ws[i].id];
+
+		if (v != WSCFG_UNSET)
+		{
+			for (j = 0; j < st_ws[i].nv; j++)
+				if (v == st_ws[i].vals[j])
+					break;
+
+			if (j >= st_ws[i].nv)
+				options.wscfg[st_ws[i].id] = WSCFG_UNSET;
+		}
+	}
+}
+
+
+/*
  * Re-apply the saved XaAES settings at desktop start (called once from
  * tb_apply). TeraDesk owns persistence: teradesk.inf carries the values
  * and pushes them into the kernel here - xaaes.cnf is never touched.
@@ -1388,6 +1429,8 @@ void ws_startup_push(void)
 	if (done)
 		return;
 	done = 1;
+
+	st_sanitize();
 
 	for (i = 0; i < ST_NWS; i++)
 	{
