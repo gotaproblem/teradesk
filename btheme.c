@@ -169,19 +169,36 @@ static void bt_gempens(const PRESET *p)
 		for (i = 0; i < 4; i++)
 		{
 			_WORD rgb[3];
+			long kv;
 
 			rgb[0] = (_WORD) ((long) p->rgb[role[i]][0] * 1000L / 255L);
 			rgb[1] = (_WORD) ((long) p->rgb[role[i]][1] * 1000L / 255L);
 			rgb[2] = (_WORD) ((long) p->rgb[role[i]][2] * 1000L / 255L);
 
 			vs_color(vdi_handle, gempen[i], rgb);
+
+			/* the same remap on XaAES's own workstation, so the
+			 * window chrome (titles, borders, sliders) follows:
+			 * palettes are per-workstation at truecolour, our
+			 * vs_color above cannot reach what XaAES draws.
+			 * Bespoke opcode 108, 0xPPRRGGBB; old kernels return
+			 * 0 and the chrome just stays native. */
+
+			kv = ((long) gempen[i] << 24) |
+			     ((long) p->rgb[role[i]][0] << 16) |
+			     ((long) p->rgb[role[i]][1] << 8) |
+			      (long) p->rgb[role[i]][2];
+			appl_control(-1, 108, (void *) kv);
 		}
 	} else if (gemsaved)
 	{
-		/* GEM Grey: put the desktop's own colours back, exactly */
+		/* GEM Grey: put the desktop's own colours back, exactly -
+		 * and XaAES's (opcode 109 restores every pen it captured) */
 
 		for (i = 0; i < 4; i++)
 			vs_color(vdi_handle, gempen[i], gemsave[i]);
+
+		appl_control(-1, 109, NULL);
 	}
 }
 
