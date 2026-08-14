@@ -32,6 +32,7 @@
 #include "font.h"
 #include "config.h"
 #include "window.h"						/* before dir.h and viewer.h */
+#include "btheme.h"
 #include "copy.h"
 #include "dir.h"
 #include "file.h"
@@ -4516,8 +4517,19 @@ void wd_set_obj0(OBJECT *obj,			/* pointer to object */
 	xd_xuserdef(&obj[0], &wxub, ub_bckbox);
 
 	wxub.ob_flags = 0;					/* so that frame around the object will not be drawn */
-	wxub.uv.fill.colour = options.win_colour;
-	wxub.uv.fill.pattern = options.win_pattern;
+
+	if (bt_themed())
+	{
+		/* themed: the interior is the theme's paper (a reserved
+		 * extended pen - the standard pens stay native so the
+		 * icons keep their colours) */
+		wxub.uv.fill.colour = bt()->paper;
+		wxub.uv.fill.pattern = -1;		/* solid */
+	} else
+	{
+		wxub.uv.fill.colour = options.win_colour;
+		wxub.uv.fill.pattern = options.win_pattern;
+	}
 
 	obj[0].ob_x = work->g_x;
 	obj[0].ob_y = row + work->g_y;
@@ -4557,6 +4569,13 @@ void set_obji(OBJECT *obj, long i, long n, bool selected, bool hidden, bool link
 	cicnblk[i].monoblk.ib_ptext = name;
 	cicnblk[i].monoblk.ib_char &= 0xFF00;
 	cicnblk[i].monoblk.ib_char |= 0x20;
+
+	if (bt_themed())
+	{
+		/* label text in WHITE (fg colour nibble, bits 12-15; pen 0
+		 * is native white) so names stay readable on dark paper */
+		cicnblk[i].monoblk.ib_char &= 0x0FFF;
+	}
 
 	objc_add(obj, 0, (_WORD) i + 1);
 }

@@ -120,36 +120,23 @@ static _WORD cur = 0;
 static BTHEME active;					/* resolved colour indices + metrics */
 
 /*
- * Theming GEM itself: everything native - window interiors, menu bar,
- * dialogs, XaAES chrome - renders through four standard pens:
- *   0 WHITE  = window / menu background
- *   1 BLACK  = text and borders
- *   8 LWHITE = 3D object faces
- *   9 LBLACK = 3D shadows and dimmed text
- * An RGB theme retunes those pens from roles it already has (paper,
- * text, face, dark) so the whole desktop follows the theme; GEM Grey
- * restores the original values, captured once before the first
- * override, so cycling back is an exact round trip.
+ * Theming GEM: FIELD LESSON (2026-08-14 screenshot). Colour icons are
+ * palette-expanded per draw from the standard pens, so remapping pens
+ * 0/1/8/9 on OUR workstation re-tinted every desk and directory icon -
+ * unacceptable. TeraDesk's own pens therefore stay NATIVE, always:
+ * icons and dialogs keep their classic colours. What we theme instead:
+ *  - our custom UI: the reserved theme pens (BT_PAL_BASE+) as before;
+ *  - directory-window interiors + icon label colour: directly, see
+ *    wd_set_obj0/set_obji in window.c (bt_themed() gates them);
+ *  - the WINDOW CHROME (titles, borders, sliders, menu bar): XaAES
+ *    draws it through its OWN workstation - bespoke opcodes 108/109
+ *    push a pen remap kernel-side. Chrome pens: 0 -> theme text
+ *    (the active title's text and gadget highlights draw in pen 0 -
+ *    mapping it to the background made them unreadable), 1 -> text,
+ *    8 -> face, 9 -> dark. Old kernels return 0: chrome stays native.
  */
 
 static const _WORD gempen[4] = { G_WHITE, G_BLACK, G_LWHITE, G_LBLACK };
-
-static _WORD gemsave[4][3];				/* captured original RGB (0-1000) */
-static _WORD gemsaved = 0;
-
-static void bt_gemcapture(void)
-{
-	_WORD i;
-
-	if (gemsaved || xd_ncolours < 16)
-		return;
-
-	for (i = 0; i < 4; i++)
-		vq_color(vdi_handle, gempen[i], 0, gemsave[i]);
-
-	gemsaved = 1;
-}
-
 
 static void bt_gempens(const PRESET *p)
 {
@@ -158,31 +145,15 @@ static void bt_gempens(const PRESET *p)
 	if (xd_ncolours < 16)
 		return;
 
-	bt_gemcapture();
-
 	if (p->pal)
 	{
-		/* pen <- role: 0 paper, 1 text, 8 face, 9 dark */
+		/* chrome pen <- role: 0 text, 1 text, 8 face, 9 dark */
 
-		static const _WORD role[4] = { R_PAPER, R_TEXT, R_FACE, R_DARK };
+		static const _WORD role[4] = { R_TEXT, R_TEXT, R_FACE, R_DARK };
 
 		for (i = 0; i < 4; i++)
 		{
-			_WORD rgb[3];
 			long kv;
-
-			rgb[0] = (_WORD) ((long) p->rgb[role[i]][0] * 1000L / 255L);
-			rgb[1] = (_WORD) ((long) p->rgb[role[i]][1] * 1000L / 255L);
-			rgb[2] = (_WORD) ((long) p->rgb[role[i]][2] * 1000L / 255L);
-
-			vs_color(vdi_handle, gempen[i], rgb);
-
-			/* the same remap on XaAES's own workstation, so the
-			 * window chrome (titles, borders, sliders) follows:
-			 * palettes are per-workstation at truecolour, our
-			 * vs_color above cannot reach what XaAES draws.
-			 * Bespoke opcode 108, 0xPPRRGGBB; old kernels return
-			 * 0 and the chrome just stays native. */
 
 			kv = ((long) gempen[i] << 24) |
 			     ((long) p->rgb[role[i]][0] << 16) |
@@ -190,16 +161,8 @@ static void bt_gempens(const PRESET *p)
 			      (long) p->rgb[role[i]][2];
 			appl_control(-1, 108, (void *) kv);
 		}
-	} else if (gemsaved)
-	{
-		/* GEM Grey: put the desktop's own colours back, exactly -
-		 * and XaAES's (opcode 109 restores every pen it captured) */
-
-		for (i = 0; i < 4; i++)
-			vs_color(vdi_handle, gempen[i], gemsave[i]);
-
-		appl_control(-1, 109, NULL);
-	}
+	} else
+		appl_control(-1, 109, NULL);	/* chrome back to native, exactly */
 }
 
 
@@ -289,6 +252,11 @@ const char *bt_name(_WORD id)
 const BTHEME *bt(void)
 {
 	return &active;
+}
+
+_WORD bt_themed(void)
+{
+	return presets[cur].pal;
 }
 
 

@@ -74,6 +74,7 @@ typedef struct
 void          bt_use(_WORD id);			/* select the active theme (clamped) */
 _WORD         bt_current(void);			/* active theme index */
 _WORD         bt_count(void);			/* number of themes */
+_WORD         bt_themed(void);			/* 0 = GEM Grey / native look */
 const char   *bt_name(_WORD id);		/* theme name for the picker */
 const BTHEME *bt(void);					/* the active theme */
 
