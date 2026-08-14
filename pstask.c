@@ -1309,32 +1309,6 @@ static void st_open(void)
 
 	st_sup = (st_get(6) > 0) ? 1 : 0;
 
-	/* TEMPORARY DIAGNOSTIC - REVERT AFTER FIELD READING. Three raw
-	 * kernel replies, chosen because the disassembled running xaaes.km
-	 * proves what each MUST be if the trap dispatches:
-	 *   101 = current workspace + 1 -> ALWAYS 1..4 (cannot be 0)
-	 *   G6  = wheel step            -> init writes 1, cnf cannot store 0
-	 *   G7  = popup delay           -> init writes 10
-	 * So: 101 in 1..4 + G6 = 0  -> the trap works, something really
-	 * zeroed the kernel's wheel value (report G7 too).
-	 * 101 = 0 -> opcode-129 traps are not dispatching at all. */
-	{
-		char a[80];
-		char n[8];
-
-		ltoa((long) appl_control(-1, 101, NULL), n, 10);
-		strcpy(a, "[1][Settings probe|101 = ");
-		strcat(a, n);
-		ltoa((long) st_get(6), n, 10);
-		strcat(a, "  G6 = ");
-		strcat(a, n);
-		ltoa((long) st_get(7), n, 10);
-		strcat(a, "  G7 = ");
-		strcat(a, n);
-		strcat(a, "][ OK ]");
-		form_alert(1, a);
-	}
-
 	/* refresh the cache from the kernel's live values */
 
 	if (st_sup)
