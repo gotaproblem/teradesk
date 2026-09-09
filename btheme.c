@@ -234,7 +234,14 @@ static void bt_gempens(const PRESET *p)
 	if (xd_ncolours < 16)
 		return;
 
-	if (p->pal)
+	/* Fluent-class presets (has_ext) do NOT use the pen remap. It maps
+	 * pen 0 (white) to the text colour, which on a light theme is near
+	 * black - and colour icons are palette-expanded from the standard
+	 * pens through the same workstation, so every white pixel in every
+	 * icon went dark. Their chrome comes from XaAES render_apj instead;
+	 * until that lands the chrome stays native GEM, which is correct. */
+
+	if (p->pal && !p->has_ext)
 	{
 		/* chrome pen <- role: 0 text, 1 text, 8 face, 9 dark */
 
