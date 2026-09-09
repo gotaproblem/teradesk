@@ -370,11 +370,25 @@ static void bt_resolve(void)
 	active.elevation = idx[BT_R_ELEVATION];
 	active.accent    = idx[BT_R_ACCENT];
 
-	active.hpad   = p->hpad;
-	active.vpad   = p->vpad;
-	active.gap    = p->gap;
+	/* APJ-OS: Fluent-class presets scale their spacing with the screen -
+	 * 8px of padding designed at 480 lines is a sliver at 1080. Classic
+	 * presets keep their pixel metrics; they were tuned by eye as pixels. */
+	{
+		_WORD num = 2, den = 2;		/* x1 */
+
+		if (p->has_ext)
+		{
+			if (xd_desk.g_h >= 1000)
+				num = 4;			/* x2 at 1080 lines and up */
+			else if (xd_desk.g_h >= 700)
+				num = 3;			/* x1.5 at 720 */
+		}
+		active.hpad   = (p->hpad * num) / den;
+		active.vpad   = (p->vpad * num) / den;
+		active.gap    = (p->gap * num) / den;
+		active.radius = (p->radius * num) / den;
+	}
 	active.flat   = p->flat;
-	active.radius = p->radius;
 
 	bt_gempens(p);
 	bt_apjpush(p);
