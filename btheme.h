@@ -54,10 +54,26 @@ typedef struct
 	_WORD title_bg;		/* panel title bar                           */
 	_WORD title_fg;		/* panel title text                          */
 	_WORD paper;		/* window + tooltip interior                 */
+
+	/* APJ-OS Fluent roles. Every preset carries them; the classic
+	 * presets derive them from their bevel colours so they draw exactly
+	 * as before. These are the roles the 12 above could not express and
+	 * that a flat, bordered, hover-aware look needs. */
+
+	_WORD border;		/* 1px outline of a flat control             */
+	_WORD hover;		/* control face under the pointer            */
+	_WORD pressed;		/* control face while the button is down     */
+	_WORD focus;		/* keyboard-focus ring                       */
+	_WORD disabled;		/* text of an unavailable control            */
+	_WORD elevation;	/* shadow / drop tint under raised surfaces  */
+	_WORD accent;		/* brand colour: default button, links,      */
+						/*   toggles - distinct from sel_bg          */
+
 	_WORD hpad;			/* text inset, px                            */
 	_WORD vpad;			/* cell top/bottom inset, px                 */
 	_WORD gap;			/* gap between cells, px                     */
 	_WORD flat;			/* 0 = 3D bevels, 1 = flat (no bevel lines)  */
+	_WORD radius;		/* corner rounding, px (0 = square)          */
 } BTHEME;
 
 /* bevel kinds for bt_bevel() */
@@ -66,10 +82,12 @@ typedef struct
 #define BT_RAISED	1	/* light top/left, dark bottom/right (buttons) */
 
 /* First of the reserved VDI colour registers a theme's RGB is loaded
- * into (12 consecutive). High enough to avoid the desktop's own low
- * indices; the wallpaper is direct-RGB at truecolour, so untouched. */
+ * into (BT_PAL_N consecutive). High enough to avoid the desktop's own
+ * low indices, low enough that the block still fits a 256-entry
+ * palette; the wallpaper is direct-RGB at truecolour, so untouched. */
 
-#define BT_PAL_BASE	240
+#define BT_PAL_N	19
+#define BT_PAL_BASE	(256 - BT_PAL_N)	/* 237..255 */
 
 void          bt_use(_WORD id);			/* select the active theme (clamped) */
 _WORD         bt_current(void);			/* active theme index */
@@ -81,5 +99,21 @@ const BTHEME *bt(void);					/* the active theme */
 
 void bt_fill(GRECT *r, _WORD colour);	/* solid fill (clipping-safe) */
 void bt_bevel(GRECT *r, _WORD kind);	/* 1px 3D edge; nothing if flat */
+void bt_border(GRECT *r, _WORD colour);	/* 1px outline, radius-aware    */
+
+/* RGB of a role in the ACTIVE preset, 0xRRGGBB. What a renderer that
+ * takes true colour (XaAES render_apj) asks for, rather than the VDI
+ * index the BTHEME fields hold. role is a BT_R_* value. */
+
+long bt_rgb(_WORD role);
+
+enum
+{
+	BT_R_FACE, BT_R_TEXT, BT_R_LIGHT, BT_R_DARK, BT_R_SELBG, BT_R_SELFG,
+	BT_R_ALBG, BT_R_ALFG, BT_R_PANEL, BT_R_TITBG, BT_R_TITFG, BT_R_PAPER,
+	BT_R_BORDER, BT_R_HOVER, BT_R_PRESSED, BT_R_FOCUS, BT_R_DISABLED,
+	BT_R_ELEVATION, BT_R_ACCENT,
+	BT_R_N
+};
 
 #endif

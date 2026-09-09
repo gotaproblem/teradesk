@@ -29,7 +29,10 @@
 #include "btheme.h"
 
 /* colour roles, in the order they are loaded into the reserved VDI
- * registers (BT_PAL_BASE + role) */
+ * registers (BT_PAL_BASE + role). The first R_N are the classic set
+ * every preset spells out; the BT_R_* values past R_N are the APJ-OS
+ * Fluent roles, which a preset may spell out (ext[]) or leave to be
+ * derived from its bevel colours. */
 
 enum
 {
@@ -37,13 +40,25 @@ enum
 	R_ALBG, R_ALFG, R_PANEL, R_TITBG, R_TITFG, R_PAPER, R_N
 };
 
+#define R_EXT_N		(BT_R_N - R_N)		/* the Fluent roles */
+
 typedef struct
 {
 	char name[16];
 	_WORD pal;						/* 1 = load rgb[] (colour screen) */
 	unsigned char rgb[R_N][3];		/* 0-255 per component */
 	_WORD hpad, vpad, gap, flat;
+	/* --- APJ-OS: trailing so the classic presets need no edits --- */
+	_WORD radius;					/* corner rounding, px */
+	_WORD has_ext;					/* 1 = ext[] is filled in */
+	unsigned char ext[R_EXT_N][3];	/* border hover pressed focus disabled elevation accent */
 } PRESET;
+
+/* If the reserved register block and the role count ever disagree,
+ * bt_resolve() would write past the block - make that a compile error. */
+
+typedef char bt_pal_block_matches_roles[(BT_PAL_N == BT_R_N) ? 1 : -1];
+typedef char bt_classic_roles_match_header[(R_N == BT_R_BORDER) ? 1 : -1];
 
 /*
  * The presets. GEM Grey keeps pal = 0 and uses the standard VDI-16
@@ -109,13 +124,31 @@ static const PRESET presets[] =
 	    {0x00,0xFF,0x00}, {0x00,0x00,0x00}, {0xDC,0x26,0x26}, {0xFF,0xFF,0xFF},
 	    {0x00,0x00,0x00}, {0x00,0x00,0x00}, {0x00,0xFF,0x00}, {0x00,0x00,0x00} },
 	  6, 3, 8, 1 },
+
+	/* 8: Fluent - APJ-OS direction C. Windows 11 light: Mica-grey
+	 *    panel F3F3F3, near-white control faces, a 1px E5E5E5 border in
+	 *    place of bevels, 0067C0 accent, 4px corners. The only preset
+	 *    that spells out the Fluent roles instead of deriving them. */
+	{ "Fluent", 1,
+	  { {0xFB,0xFB,0xFB}, {0x1B,0x1B,0x1B}, {0xFF,0xFF,0xFF}, {0xE5,0xE5,0xE5},
+	    {0x00,0x67,0xC0}, {0xFF,0xFF,0xFF}, {0xC4,0x2B,0x1C}, {0xFF,0xFF,0xFF},
+	    {0xF3,0xF3,0xF3}, {0xF3,0xF3,0xF3}, {0x1B,0x1B,0x1B}, {0xFF,0xFF,0xFF} },
+	  8, 4, 6, 1,
+	  4, 1,
+	  { {0xE5,0xE5,0xE5},	/* border    */
+	    {0xF6,0xF6,0xF6},	/* hover     */
+	    {0xF0,0xF0,0xF0},	/* pressed   */
+	    {0x1B,0x1B,0x1B},	/* focus     - Win11 draws a dark 2px ring */
+	    {0xA0,0xA0,0xA0},	/* disabled  */
+	    {0xD6,0xD6,0xD6},	/* elevation */
+	    {0x00,0x67,0xC0} } },	/* accent    */
 };
 
 #define NPRESETS	((_WORD) (sizeof(presets) / sizeof(presets[0])))
 
 /* The GEM Grey / mono fallback: standard VDI-16 indices per role. */
 
-static const _WORD fb[R_N] =
+static const _WORD fb[BT_R_N] =
 {
 	G_WHITE,	/* face     */
 	G_BLACK,	/* text     */
@@ -128,8 +161,48 @@ static const _WORD fb[R_N] =
 	G_LWHITE,	/* panel    */
 	G_LBLACK,	/* title_bg */
 	G_WHITE,	/* title_fg */
-	G_WHITE		/* paper    */
+	G_WHITE,	/* paper    */
+	G_LBLACK,	/* border    */
+	G_WHITE,	/* hover     */
+	G_LBLACK,	/* pressed   */
+	G_LBLACK,	/* focus     */
+	G_LBLACK,	/* disabled  */
+	G_LBLACK,	/* elevation */
+	G_LBLACK	/* accent    */
 };
+
+/* Which classic role a preset's Fluent roles fall back to when it does
+ * not spell them out: border/pressed/disabled/elevation take the bevel
+ * shadow, hover the bevel highlight, focus/accent the selection colour.
+ * The classic presets therefore draw exactly as they did. */
+
+static const _WORD derive[R_EXT_N] =
+{
+	R_DARK,		/* border    */
+	R_LIGHT,	/* hover     */
+	R_DARK,		/* pressed   */
+	R_SELBG,	/* focus     */
+	R_DARK,		/* disabled  */
+	R_DARK,		/* elevation */
+	R_SELBG		/* accent    */
+};
+
+/* Nominal RGB of the standard pens the fallback table names, for
+ * bt_rgb() on GEM Grey / mono. Only the five pens fb[] uses. */
+
+static long pen_rgb(_WORD pen)
+{
+	switch (pen)
+	{
+		case G_BLACK:	return 0x000000L;
+		case G_RED:		return 0xFF0000L;
+		case G_LWHITE:	return 0xBFBFBFL;
+		case G_LBLACK:	return 0x7F7F7FL;
+		default:		return 0xFFFFFFL;	/* G_WHITE */
+	}
+}
+
+static unsigned char cur_rgb[BT_R_N][3];	/* the active preset, all roles */
 
 static _WORD cur = 0;
 static BTHEME active;					/* resolved colour indices + metrics */
@@ -190,26 +263,44 @@ static void bt_gempens(const PRESET *p)
 static void bt_resolve(void)
 {
 	const PRESET *p = &presets[cur];
-	_WORD idx[R_N];
+	_WORD idx[BT_R_N];
 	_WORD i;
+
+	/* the complete role table for this preset: classic roles as given,
+	 * Fluent roles as given or derived */
+
+	for (i = 0; i < R_N; i++)
+	{
+		cur_rgb[i][0] = p->rgb[i][0];
+		cur_rgb[i][1] = p->rgb[i][1];
+		cur_rgb[i][2] = p->rgb[i][2];
+	}
+	for (i = 0; i < R_EXT_N; i++)
+	{
+		const unsigned char *src = p->has_ext ? p->ext[i] : p->rgb[derive[i]];
+
+		cur_rgb[R_N + i][0] = src[0];
+		cur_rgb[R_N + i][1] = src[1];
+		cur_rgb[R_N + i][2] = src[2];
+	}
 
 	if (p->pal && xd_ncolours >= 16)
 	{
-		for (i = 0; i < R_N; i++)
+		for (i = 0; i < BT_R_N; i++)
 		{
 			_WORD rgb[3];
 
 			/* VDI colour components are 0-1000, not 0-255 */
-			rgb[0] = (_WORD) ((long) p->rgb[i][0] * 1000L / 255L);
-			rgb[1] = (_WORD) ((long) p->rgb[i][1] * 1000L / 255L);
-			rgb[2] = (_WORD) ((long) p->rgb[i][2] * 1000L / 255L);
+			rgb[0] = (_WORD) ((long) cur_rgb[i][0] * 1000L / 255L);
+			rgb[1] = (_WORD) ((long) cur_rgb[i][1] * 1000L / 255L);
+			rgb[2] = (_WORD) ((long) cur_rgb[i][2] * 1000L / 255L);
 
 			vs_color(vdi_handle, BT_PAL_BASE + i, rgb);
 			idx[i] = BT_PAL_BASE + i;
 		}
 	} else
 	{
-		for (i = 0; i < R_N; i++)
+		for (i = 0; i < BT_R_N; i++)
 			idx[i] = fb[i];
 	}
 
@@ -226,10 +317,19 @@ static void bt_resolve(void)
 	active.title_fg = idx[R_TITFG];
 	active.paper    = idx[R_PAPER];
 
-	active.hpad = p->hpad;
-	active.vpad = p->vpad;
-	active.gap  = p->gap;
-	active.flat = p->flat;
+	active.border    = idx[BT_R_BORDER];
+	active.hover     = idx[BT_R_HOVER];
+	active.pressed   = idx[BT_R_PRESSED];
+	active.focus     = idx[BT_R_FOCUS];
+	active.disabled  = idx[BT_R_DISABLED];
+	active.elevation = idx[BT_R_ELEVATION];
+	active.accent    = idx[BT_R_ACCENT];
+
+	active.hpad   = p->hpad;
+	active.vpad   = p->vpad;
+	active.gap    = p->gap;
+	active.flat   = p->flat;
+	active.radius = p->radius;
 
 	bt_gempens(p);
 }
@@ -352,4 +452,51 @@ void bt_bevel(GRECT *r, _WORD kind)
 	bt_line(x1, y1, x1, y2, tl);			/* left   */
 	bt_line(x1, y2, x2, y2, br);			/* bottom */
 	bt_line(x2, y1 + 1, x2, y2, br);		/* right  */
+}
+
+
+/*
+ * True RGB of a role in the active preset, 0xRRGGBB - for a consumer
+ * that draws in colour rather than through our VDI registers (XaAES
+ * render_apj takes RGB directly; the chrome remap of opcode 108 does
+ * too). GEM Grey and mono report the nominal colour of the standard
+ * pen the role falls back to.
+ */
+
+long bt_rgb(_WORD role)
+{
+	if (role < 0 || role >= BT_R_N)
+		return 0L;
+
+	if (presets[cur].pal && xd_ncolours >= 16)
+		return ((long) cur_rgb[role][0] << 16) |
+		       ((long) cur_rgb[role][1] << 8) |
+		        (long) cur_rgb[role][2];
+
+	return pen_rgb(fb[role]);
+}
+
+
+/*
+ * A one-pixel outline in the given colour - the flat look's edge, where
+ * bt_bevel() would draw a 3D one. With a corner radius the four corner
+ * pixels are left out, which at 1px reads as rounding without needing
+ * arcs; a real radius > 1 is the renderer's job (render_apj), not ours.
+ */
+
+void bt_border(GRECT *r, _WORD colour)
+{
+	_WORD x1 = r->g_x;
+	_WORD y1 = r->g_y;
+	_WORD x2 = r->g_x + r->g_w - 1;
+	_WORD y2 = r->g_y + r->g_h - 1;
+	_WORD c = (active.radius > 0) ? 1 : 0;
+
+	if (r->g_w < 3 || r->g_h < 3)
+		c = 0;
+
+	bt_line(x1 + c, y1, x2 - c, y1, colour);		/* top    */
+	bt_line(x1 + c, y2, x2 - c, y2, colour);		/* bottom */
+	bt_line(x1, y1 + c, x1, y2 - c, colour);		/* left   */
+	bt_line(x2, y1 + c, x2, y2 - c, colour);		/* right  */
 }
