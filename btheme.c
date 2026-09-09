@@ -425,6 +425,10 @@ _WORD bt_text(_WORD x, _WORD y, const char *s)
 	_WORD attr[10];
 	GRECT clip;
 
+#ifdef BT_NO_AATEXT
+	(void) rq; (void) attr; (void) clip; (void) x; (void) y; (void) s;
+	return 0;					/* bisect build: never hand text to XaAES */
+#endif
 	if (!apj_render || !presets[cur].has_ext || xd_ncolours < 16)
 		return 0;
 

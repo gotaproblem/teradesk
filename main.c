@@ -54,6 +54,7 @@
 #include "psmenu.h"
 #include "bkgimg.h"
 #include "btheme.h"
+#include "stringf.h"
 #include "main.h"
 
 #undef os_start
@@ -1743,7 +1744,17 @@ static void evntloop(void)
 		/* Mouse entered/left a taskbar hover rectangle */
 
 		if (event & MU_M1)
+		{
+#ifdef TIP_DEBUG
+			{
+				char b[64];
+
+				sprintf(b, "M1 event at %d,%d", loopevents.ev_mmox, loopevents.ev_mmoy);
+				tb_dbg(b);
+			}
+#endif
 			tb_hover(loopevents.ev_mmox, loopevents.ev_mmoy);
+		}
 
 		/* Process any recieved messages */
 

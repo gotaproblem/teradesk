@@ -40,8 +40,33 @@
 #include "window.h"
 #include "icon.h"
 #include "btheme.h"
+#include "stringf.h"
 #include "taskbar.h"
 #include "pstask.h"
+#include <osbind.h>
+
+/* TIP_DEBUG: trace the tooltip path to u:\\tmp\\tipdbg.txt (Fopen/Fwrite,
+ * no library involvement). Bisect aid - build with -DTIP_DEBUG. */
+#ifdef TIP_DEBUG
+static void tipdbg(const char *s)
+{
+	long h = Fopen("u:\\tmp\\tipdbg.txt", 2);
+
+	if (h < 0)
+		h = Fcreate("u:\\tmp\\tipdbg.txt", 0);
+	if (h >= 0)
+	{
+		Fseek(0L, (short) h, 2);
+		Fwrite((short) h, (long) strlen(s), s);
+		Fwrite((short) h, 2L, "\r\n");
+		Fclose((short) h);
+	}
+}
+#define TIPDBG(s) tipdbg(s)
+void tb_dbg(const char *s) { tipdbg(s); }
+#else
+#define TIPDBG(s) ((void) 0)
+#endif
 
 
 /*
@@ -651,6 +676,7 @@ static void tip_draw(WINDOW *w, GRECT *area)
 
 	r1 = work;
 
+	TIPDBG("tip_draw");
 	xd_begupdate();
 	xd_mouse_off();
 
@@ -701,6 +727,7 @@ static void tip_draw(WINDOW *w, GRECT *area)
 
 	xd_mouse_on();
 	xd_endupdate();
+	TIPDBG("tip_draw done");
 
 	(void) w;
 }
@@ -731,6 +758,7 @@ static void tip_close(void)
 {
 	if (tip_win != NULL)
 	{
+		TIPDBG("tip_close");
 		xw_close(tip_win);
 		xw_delete(tip_win);
 		tip_win = NULL;
@@ -776,6 +804,7 @@ static void tip_show(GRECT *anchor)
 
 	tip_win = xw_create(TIP_WIND, &tip_functions, 0, &size, sizeof(TIP_WINDOW), NULL, &error);
 
+	TIPDBG(tip_win ? "tip_show: created" : "tip_show: xw_create FAILED");
 	if (tip_win != NULL)
 	{
 		xw_open(tip_win, &size);
@@ -823,13 +852,20 @@ static void tip_uptime_lines(void)
 
 static void tip_uptime(void)
 {
+	TIPDBG("tip_uptime: dwell reached");
 	if (tip_win != NULL || tb_psid == 0)
+	{
+		TIPDBG(tip_win ? "  already open" : "  no psid");
 		return;
+	}
 
 	tip_uptime_lines();
 
 	if (tip_nlines == 0)
+	{
+		TIPDBG("  no lines");
 		return;
+	}
 
 	tip_kind = 1;
 	tip_minw = 0;
@@ -1550,6 +1586,17 @@ void tb_hover(_WORD x, _WORD y)
 
 	if (tgt != tb_hovtgt)
 	{
+#ifdef TIP_DEBUG
+		{
+			char b[128];
+
+			sprintf(b, "hover: %d -> %d at %d,%d  clock %d,%d %dx%d  bar %d,%d %dx%d",
+				tb_hovtgt, tgt, x, y,
+				tb_clockr.g_x, tb_clockr.g_y, tb_clockr.g_w, tb_clockr.g_h,
+				tb_rect.g_x, tb_rect.g_y, tb_rect.g_w, tb_rect.g_h);
+			tipdbg(b);
+		}
+#endif
 		tb_hovtgt = tgt;
 		tb_dwell = 0;
 		tip_close();					/* tooltip belongs to the old target */
@@ -1582,6 +1629,14 @@ void tb_tick(void)
 		_WORD mx, my, dummy;
 
 		graf_mkstate(&mx, &my, &dummy, &dummy);
+#ifdef TIP_DEBUG
+		{
+			char b[64];
+
+			sprintf(b, "tick: mkstate %d,%d", mx, my);
+			tipdbg(b);
+		}
+#endif
 		tb_hover(mx, my);
 	}
 
