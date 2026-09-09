@@ -107,6 +107,15 @@ void bt_border(GRECT *r, _WORD colour);	/* 1px outline, radius-aware    */
 
 long bt_rgb(_WORD role);
 
+/* Ask XaAES to draw this client with the APJ-OS renderer (bespoke
+ * appl_control opcode 110). Call once, right after appl_init() and
+ * before any window exists. bt_apj_render() then says whether it took:
+ * 0 on a stock or older kernel, where the desktop themes the classic
+ * way through opcodes 108/109. */
+
+void  bt_attach_apj_render(void);
+_WORD bt_apj_render(void);
+
 enum
 {
 	BT_R_FACE, BT_R_TEXT, BT_R_LIGHT, BT_R_DARK, BT_R_SELBG, BT_R_SELFG,

@@ -205,6 +205,7 @@ static long pen_rgb(_WORD pen)
 static unsigned char cur_rgb[BT_R_N][3];	/* the active preset, all roles */
 
 static _WORD cur = 0;
+static _WORD apj_render = 0;			/* 1 = XaAES draws us with render_apj */
 static BTHEME active;					/* resolved colour indices + metrics */
 
 /*
@@ -332,6 +333,20 @@ static void bt_resolve(void)
 	active.radius = p->radius;
 
 	bt_gempens(p);
+}
+
+
+void bt_attach_apj_render(void)
+{
+	/* self-only opcode; returns 0 when the module is unavailable, and a
+	 * stock XaAES answers 0 to any opcode it does not know - both mean
+	 * "no", so there is nothing to tell apart */
+	apj_render = (appl_control(-1, 110, NULL) != 0) ? 1 : 0;
+}
+
+_WORD bt_apj_render(void)
+{
+	return apj_render;
 }
 
 

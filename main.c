@@ -53,6 +53,7 @@
 #include "taskbar.h"
 #include "psmenu.h"
 #include "bkgimg.h"
+#include "btheme.h"
 #include "main.h"
 
 #undef os_start
@@ -1930,6 +1931,11 @@ int main(void)
 
 	if ((ap_id = appl_init()) < 0)
 		return -1;
+
+	/* APJ-OS: opt into the Fluent object renderer before anything is
+	 * drawn. Harmless on a kernel without it (btheme.c) */
+
+	bt_attach_apj_render();
 
 	/* 
 	 * Get the version of the TOS and the AES.
