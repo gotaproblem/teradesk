@@ -116,6 +116,13 @@ long bt_rgb(_WORD role);
 void  bt_attach_apj_render(void);
 _WORD bt_apj_render(void);
 
+/* Draw text antialiased through XaAES (opcode 114) when we are on the
+ * APJ renderer with a Fluent-class theme. (x,y) = cell top-left, the
+ * current VDI text colour and font apply, the current xd clip applies.
+ * Returns 0 if the caller must draw it with v_gtext instead. */
+
+_WORD bt_text(_WORD x, _WORD y, const char *s);
+
 enum
 {
 	BT_R_FACE, BT_R_TEXT, BT_R_LIGHT, BT_R_DARK, BT_R_SELBG, BT_R_SELFG,

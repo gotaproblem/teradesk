@@ -356,10 +356,26 @@ _WORD xd_is_tristate(OBJECT *object)
  * r	- clipping rectangle
  */
 
+/* APJ-OS: the current clip, for text drawn on our behalf by XaAES
+ * (btheme.c bt_text). The VDI cannot be asked for it. */
+
+static GRECT xd_cur_clip;
+static _WORD xd_cur_clip_on = 0;
+
+_WORD xd_clip_get(GRECT *r)
+{
+	if (!xd_cur_clip_on)
+		return 0;
+	*r = xd_cur_clip;
+	return 1;
+}
+
 void xd_clip_on(GRECT *r)
 {
 	_WORD pxy[4];
 
+	xd_cur_clip = *r;
+	xd_cur_clip_on = 1;
 	xd_rect2pxy(r, pxy);
 	udef_vs_clip(xd_vhandle, 1, pxy);
 }
@@ -373,6 +389,7 @@ void xd_clip_off(void)
 {
 	_WORD pxy[4];
 
+	xd_cur_clip_on = 0;
 	udef_vs_clip(xd_vhandle, 0, pxy);
 }
 

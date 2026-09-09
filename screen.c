@@ -53,10 +53,7 @@ bool clip_desk(GRECT *r)
 
 void clipdesk_on(void)
 {
-	_WORD clip_rect[4];
-
-	xd_rect2pxy(&xd_desk, clip_rect);
-	vs_clip(vdi_handle, 1, clip_rect);
+	xd_clip_on(&xd_desk);		/* through xdialog so the clip is tracked */
 }
 
 

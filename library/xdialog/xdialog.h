@@ -254,6 +254,7 @@ _WORD xd_is_tristate(OBJECT *tree);
 
 void xd_clip_on(GRECT *r);
 void xd_clip_off(void);
+_WORD xd_clip_get(GRECT *r);		/* 1 + rect if clipping is on */
 
 _WORD xd_vst_point(_WORD height, _WORD *ch);
 _WORD xd_fnt_point(_WORD height, _WORD *cw, _WORD *ch);

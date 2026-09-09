@@ -394,6 +394,45 @@ _WORD bt_apj_render(void)
 	return apj_render;
 }
 
+/* layout is the contract with XaAES render_apj.h - keep identical */
+
+typedef struct
+{
+	_WORD x, y;
+	_WORD pen;
+	_WORD cw, ch;
+	_WORD clip[4];
+	const char *s;
+} APJ_TEXTREQ;
+
+_WORD bt_text(_WORD x, _WORD y, const char *s)
+{
+	APJ_TEXTREQ rq;
+	_WORD attr[10];
+	GRECT clip;
+
+	if (!apj_render || !presets[cur].has_ext || xd_ncolours < 16)
+		return 0;
+
+	vqt_attributes(vdi_handle, attr);	/* [1] colour, [8] cell w, [9] cell h */
+
+	rq.x = x;
+	rq.y = y;
+	rq.pen = attr[1];
+	rq.cw = attr[8];
+	rq.ch = attr[9];
+	rq.s = s;
+
+	if (!xd_clip_get(&clip))
+		clip = xd_desk;
+	rq.clip[0] = clip.g_x;
+	rq.clip[1] = clip.g_y;
+	rq.clip[2] = clip.g_x + clip.g_w - 1;
+	rq.clip[3] = clip.g_y + clip.g_h - 1;
+
+	return (appl_control(-1, 114, &rq) != 0) ? 1 : 0;
+}
+
 
 void bt_use(_WORD id)
 {

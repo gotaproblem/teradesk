@@ -221,6 +221,8 @@ void hourglass_mouse(void)
 
 void w_transptext(_WORD x, _WORD y, char *text)
 {
+	if (bt_text(x, y, text))		/* APJ-OS: antialiased via XaAES */
+		return;
 	xd_vswr_trans_mode();
 	v_gtext(vdi_handle, x, y, text);
 }
