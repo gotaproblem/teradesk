@@ -227,6 +227,39 @@ static BTHEME active;					/* resolved colour indices + metrics */
 
 static const _WORD gempen[4] = { G_WHITE, G_BLACK, G_LWHITE, G_LBLACK };
 
+/*
+ * The APJ-OS path. When XaAES is drawing us with render_apj (opcode
+ * 110 took), a Fluent-class preset hands it every role as true RGB
+ * through opcode 111 - the renderer loads them into its own colour
+ * registers and draws flat controls with them. A classic preset sends
+ * 112 instead, so render_apj falls back to the stock look and the pen
+ * remap above does the theming as before. Role order = BT_R_*.
+ */
+
+static void bt_apjpush(const PRESET *p)
+{
+	_WORD i;
+
+	if (!apj_render || xd_ncolours < 16)
+		return;
+
+	if (!(p->pal && p->has_ext))
+	{
+		appl_control(-1, 112, NULL);
+		return;
+	}
+
+	for (i = 0; i < BT_R_N; i++)
+	{
+		long kv = ((long) i << 24) |
+		          ((long) cur_rgb[i][0] << 16) |
+		          ((long) cur_rgb[i][1] << 8) |
+		           (long) cur_rgb[i][2];
+
+		appl_control(-1, 111, (void *) kv);
+	}
+}
+
 static void bt_gempens(const PRESET *p)
 {
 	_WORD i;
@@ -340,6 +373,7 @@ static void bt_resolve(void)
 	active.radius = p->radius;
 
 	bt_gempens(p);
+	bt_apjpush(p);
 }
 
 
