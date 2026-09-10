@@ -2912,6 +2912,16 @@ bool load_icons(void)
 		{
 			n_icons++;
 		} while ((icons[i++].ob_flags & OF_LASTOB) == 0);
+
+		/* APJ-OS: the icon cell follows the icon size in the resource
+		 * (72x40 objects -> the classic 80x46 cell; a 48px set is 96x64
+		 * -> 104x70), so larger icon sets lay out without code changes */
+
+		if (icons[0].ob_width > 0 && icons[0].ob_height > 0)
+		{
+			iconw = icons[0].ob_width + 8;
+			iconh = icons[0].ob_height + 6;
+		}
 	}
 
 	_AESrscfile = svtree;
