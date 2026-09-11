@@ -187,6 +187,8 @@ typedef struct
 	_WORD mins;							/* application: its minimised windows */
 	char name[12];						/* AES name, trailing blanks cut */
 	char title[32];						/* tooltip: name, or the window's title */
+	char path[TIP_MAXLEN];				/* our own window: where it is (snippet) */
+	bool text;							/* our own window: a text viewer */
 	_WORD icon;							/* index in icons[], -1 = none */
 	CICONBLK blk;						/* drawing copy, no label */
 } TB_APP;
@@ -479,8 +481,8 @@ static void tb_appicon(TB_APP *a)
 
 	a->icon = -1;
 
-	if (a->win > 0 && a->id == ap_id)
-		ic = icnt_geticon("\\", ITM_FOLDER, ITM_NOTUSED);	/* our own: a folder */
+	if (a->win > 0 && a->id == ap_id)	/* our own: the folder or file icon */
+		ic = icnt_geticon(a->title, a->text ? ITM_FILE : ITM_FOLDER, ITM_NOTUSED);
 	else
 	{
 		strcpy(fn, a->win > 0 ? "" : a->name);
@@ -494,6 +496,70 @@ static void tb_appicon(TB_APP *a)
 		a->blk = *icons[ic].ob_spec.ciconblk;
 		a->blk.monoblk.ib_ptext = tb_noname;
 		a->blk.monoblk.ib_char = (_WORD) (a->blk.monoblk.ib_char & 0xFF00);
+	}
+}
+
+
+/*
+ * A minimised window of our own: its folder (or file) name as the title
+ * and as much of its path as fits a tooltip line - "S:\...\STBox\bg" -
+ * so same-looking folders can be told apart. The AES title is no help:
+ * iconified windows are all renamed "Tera Desktop".
+ */
+
+static void tb_ownwin(TB_APP *a)
+{
+	WINDOW *w = xw_hfind(a->win);
+	const char *p = w ? wd_path(w) : NULL;
+	_WORD len, k, room = TIP_MAXLEN - 1;
+
+	a->path[0] = 0;
+	a->text = (w != NULL && xw_type(w) == TEXT_WIND);
+
+	if (p == NULL || *p == 0)
+		return;
+
+	len = (_WORD) strlen(p);
+
+	/* title: the last component, a trailing backslash ignored ("S:\"
+	 * stays whole) */
+
+	k = len;
+	if (k > 3 && p[k - 1] == '\\')
+		k--;
+	{
+		_WORD e = k;
+
+		while (k > 0 && p[k - 1] != '\\')
+			k--;
+		if (e - k > 0 && !(e <= 3 && p[1] == ':'))
+		{
+			_WORD m = e - k;
+
+			if (m > (_WORD) sizeof(a->title) - 1)
+				m = (_WORD) sizeof(a->title) - 1;
+			memcpy(a->title, p + k, (size_t) m);
+			a->title[m] = 0;
+		} else
+			strsncpy(a->title, p, sizeof(a->title));
+	}
+
+	/* path: whole, or drive + "\..." + the tail from a backslash */
+
+	if (len <= room)
+		strcpy(a->path, p);
+	else
+	{
+		_WORD head = (p[1] == ':') ? 2 : 0, t;
+
+		t = len - (room - head - 4);	/* "\..." is 4 */
+		for (k = t; k < len && p[k] != '\\'; k++)
+			;
+		if (k >= len)
+			k = t;
+		memcpy(a->path, p, (size_t) head);
+		strcpy(a->path + head, "\\...");
+		strcat(a->path, p + k);
 	}
 }
 
@@ -557,6 +623,10 @@ static bool tb_scanapps(void)
 			na[n].name[0] = 0;
 			de[j].title[sizeof(de[j].title) - 1] = 0;
 			strsncpy(na[n].title, de[j].title[0] ? de[j].title : "Window", sizeof(na[n].title));
+			na[n].path[0] = 0;
+			na[n].text = FALSE;
+			if (na[n].id == ap_id)
+				tb_ownwin(&na[n]);
 			n++;
 		}
 	}
@@ -570,11 +640,14 @@ static bool tb_scanapps(void)
 	for (i = 0; i < n; i++)
 	{
 		if (i >= tb_napps || na[i].id != tb_apps[i].id || na[i].win != tb_apps[i].win ||
-			strcmp(na[i].name, tb_apps[i].name) != 0)
+			strcmp(na[i].name, tb_apps[i].name) != 0 ||
+			(na[i].win > 0 && strcmp(na[i].title, tb_apps[i].title) != 0))
 		{
 			tb_apps[i].id = na[i].id;
 			tb_apps[i].win = na[i].win;
+			tb_apps[i].text = na[i].text;
 			strcpy(tb_apps[i].name, na[i].name);
+			strcpy(tb_apps[i].title, na[i].title);
 			tb_appicon(&tb_apps[i]);
 			changed = TRUE;
 		}
@@ -582,6 +655,7 @@ static bool tb_scanapps(void)
 			changed = TRUE;
 		tb_apps[i].mins = na[i].mins;
 		strcpy(tb_apps[i].title, na[i].title);
+		strcpy(tb_apps[i].path, na[i].path);
 	}
 
 	tb_napps = n;
@@ -2348,8 +2422,15 @@ void tb_tick(void)
 			{
 				/* dock: the application's name */
 
-				strsncpy(tip_lines[0], tb_apps[tb_hovtgt - TB_HOV_APP].title, TIP_MAXLEN);
+				TB_APP *a = &tb_apps[tb_hovtgt - TB_HOV_APP];
+
+				strsncpy(tip_lines[0], a->title, TIP_MAXLEN);
 				tip_nlines = 1;
+				if (a->path[0] && strcmp(a->path, a->title) != 0)
+				{
+					strsncpy(tip_lines[1], a->path, TIP_MAXLEN);
+					tip_nlines = 2;
+				}
 				tip_kind = 3;			/* static */
 				tip_minw = 0;
 				tip_show(&tb_appr[tb_hovtgt - TB_HOV_APP]);
