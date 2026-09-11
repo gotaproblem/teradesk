@@ -63,6 +63,8 @@ void dsk_draw(void);
 void redraw_desk(GRECT *r);
 void regen_desktop(OBJECT *desk_tree);
 void dsk_areachanged(void);		/* APJ-OS: xd_desk changed - move the desktop trees */
+bool icn_sameprg(const char *path, const char *aesname);	/* APJ-OS: path is the program with this AES name */
+_WORD dsk_prgicon(const char *aesname, char *path, size_t n);	/* APJ-OS: a desk icon of that program: icon index, or -1 */
 _WORD icn_labelchars(void);		/* APJ-OS: icon label width in characters */
 void dsk_workarea(void);		/* APJ-OS: follow a menu bar height change */
 void dsk_options(void);

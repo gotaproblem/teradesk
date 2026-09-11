@@ -41,6 +41,9 @@
 #include "icon.h"
 #include "icontype.h"					/* icnt_geticon: running-app icons */
 #include "dir.h"						/* dir_dispcase: names as shown */
+#include "prgtype.h"
+#include "filetype.h"
+#include "applik.h"					/* installed applications: program paths */
 #include "btheme.h"
 #include "stringf.h"
 #include "taskbar.h"
@@ -650,23 +653,121 @@ static _WORD tb_apphit(_WORD x, _WORD y)
 }
 
 
+/*
+ * Programs TeraDesk started (start_prg), newest last: the AES lists a
+ * running program only by its 8-character name, and the dock needs the
+ * file name to find the icon assigned to it
+ */
+
+#define TB_NLAUNCH	16
+
+static char tb_launch[TB_NLAUNCH][128];
+static _WORD tb_nlaunch = 0;
+
+
+void tb_launched(const char *fname)
+{
+	_WORD i;
+
+	if (fname == NULL || *fname == 0 || strlen(fname) >= sizeof(tb_launch[0]))
+		return;
+
+	for (i = 0; i < tb_nlaunch; i++)
+		if (strcmp(tb_launch[i], fname) == 0)
+			break;
+
+	if (i == tb_nlaunch && tb_nlaunch < TB_NLAUNCH)
+		tb_nlaunch++;
+	else if (i == tb_nlaunch)
+		i = 0;						/* full: drop the oldest */
+
+	for (; i < tb_nlaunch - 1; i++)
+		strcpy(tb_launch[i], tb_launch[i + 1]);
+	strcpy(tb_launch[tb_nlaunch - 1], fname);
+}
+
+
+/* The path of the running program aesname, or NULL */
+
+static const char *tb_prgpath(const char *aesname)
+{
+	_WORD i;
+	APPLINFO *app;
+
+	for (i = tb_nlaunch - 1; i >= 0; i--)
+		if (icn_sameprg(tb_launch[i], aesname))
+			return tb_launch[i];
+
+	for (app = applikations; app != NULL; app = app->next)
+		if (icn_sameprg(app->name, aesname))
+			return app->name;
+
+	return NULL;
+}
+
+
 /* The icon for a running application: TeraDesk's program icon for
  * NAME.APP (its icon assignments apply), label removed */
 
 static void tb_appicon(TB_APP *a)
 {
-	char fn[16];
+	char fn[64];
 	_WORD ic;
 
 	a->icon = -1;
 
 	if (a->win > 0 && a->id == ap_id)	/* our own: the folder or file icon */
 		ic = icnt_geticon(a->title, a->text ? ITM_FILE : ITM_FOLDER, ITM_NOTUSED);
+	else if (a->win > 0)
+		ic = icnt_geticon(".APP", ITM_PROGRAM, ITM_NOTUSED);
 	else
 	{
-		strcpy(fn, a->win > 0 ? "" : a->name);
-		strcat(fn, ".APP");
-		ic = icnt_geticon(fn, ITM_PROGRAM, ITM_NOTUSED);
+		/* The AES only gives "MP3GEM". Look up the real file name - from
+		 * what we launched, the installed applications or a program icon
+		 * on the desk - so icon assignments made for MP3GEM.PRG apply.
+		 * A desk icon's own image wins when no assignment names the file. */
+
+		VLNAME dpath;
+		const char *path = tb_prgpath(a->name);
+		_WORD dic = dsk_prgicon(a->name, dpath, sizeof(dpath));
+
+		if (path == NULL && dic >= 0)
+			path = dpath;
+
+		if (path != NULL)
+		{
+			const char *b = path, *p, *ext = NULL;
+
+			for (p = path; *p; p++)
+			{
+				if (*p == '\\' || *p == '/' || *p == ':')
+				{
+					b = p + 1;
+					ext = NULL;
+				} else if (*p == '.')
+					ext = p;
+			}
+			strsncpy(fn, b, sizeof(fn));
+			ic = icnt_geticon(fn, ITM_PROGRAM, ITM_NOTUSED);
+
+			if (dic >= 0)
+			{
+				/* the icon any program of this type gets: no specific
+				 * assignment matched, so show the desk icon's */
+				char any[16];
+
+				strcpy(any, "\001\001\001\001");
+				if (ext != NULL && strlen(ext) < sizeof(any) - 5)
+					strcat(any, ext);
+				if (icnt_geticon(any, ITM_PROGRAM, ITM_NOTUSED) == ic)
+					ic = dic;
+			}
+		} else
+		{
+			strcpy(fn, a->name);
+			strcat(fn, ".APP");
+			ic = icnt_geticon(fn, ITM_PROGRAM, ITM_NOTUSED);
+		}
 	}
 
 	if (ic >= 0 && icons != NULL)

@@ -41,6 +41,7 @@
 #include "startprg.h"
 #include "va.h"
 #include "dir.h"
+#include "taskbar.h"
 
 
 typedef struct
@@ -473,6 +474,10 @@ void start_prg(const char *fname,		/* path+filename of program */
 	(void) limmem;
 	(void) single;
 #endif
+
+	/* APJ-OS: the taskbar dock finds this program's icon by its file name */
+
+	tb_launched(fname);
 
 	/* Determine program type */
 

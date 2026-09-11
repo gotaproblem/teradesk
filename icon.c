@@ -309,6 +309,63 @@ static void set_maxicons(void)
 
 
 /*
+ * APJ-OS: does path name the program an AES lists as aesname? The AES name
+ * is the program's file name without extension, at most 8 characters,
+ * upper case ("MP3GEM" for S:\NATFEATS\MP3GEM.PRG, "HW_30-60" for
+ * hw_30-60.app).
+ */
+
+bool icn_sameprg(const char *path, const char *aesname)
+{
+	const char *b = path, *p;
+	_WORD k;
+
+	if (path == NULL || aesname == NULL || *aesname == 0)
+		return FALSE;
+
+	for (p = path; *p; p++)
+		if (*p == '\\' || *p == '/' || *p == ':')
+			b = p + 1;
+
+	for (k = 0; k < 8 && b[k] && b[k] != '.'; k++)
+	{
+		if (toupper((unsigned char) b[k]) != toupper((unsigned char) aesname[k]))
+			return FALSE;
+	}
+
+	return aesname[k] == 0;
+}
+
+
+/*
+ * APJ-OS: a program icon on the current desk for the running program
+ * aesname - its icon index (and path), or -1
+ */
+
+_WORD dsk_prgicon(const char *aesname, char *path, size_t n)
+{
+	_WORD i;
+	ICON *icn = desk_icons;
+
+	if (icn == NULL)
+		return -1;
+
+	for (i = 0; i < max_icons; i++, icn++)
+	{
+		if ((icn->item_type == ITM_PROGRAM || icn->tgt_type == ITM_PROGRAM) &&
+			icn_sameprg(icn->icon_dat.name, aesname))
+		{
+			if (path != NULL)
+				strsncpy(path, icn->icon_dat.name, n);
+			return icn->icon_index;
+		}
+	}
+
+	return -1;
+}
+
+
+/*
  * APJ-OS: after the grid changed while loading (no redraws): every desk's
  * icon objects to their grid positions at the new cell size
  */
