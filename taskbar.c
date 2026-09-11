@@ -40,6 +40,7 @@
 #include "window.h"
 #include "icon.h"
 #include "icontype.h"					/* icnt_geticon: running-app icons */
+#include "dir.h"						/* dir_dispcase: names as shown */
 #include "btheme.h"
 #include "stringf.h"
 #include "taskbar.h"
@@ -721,6 +722,7 @@ static void tb_ownwin(TB_APP *a)
 		} else
 			strsncpy(a->title, p, sizeof(a->title));
 	}
+	dir_dispcase(a->title);				/* the name as the windows show it */
 
 	/* path: whole, or drive + "\..." + the tail from a backslash */
 

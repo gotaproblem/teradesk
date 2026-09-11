@@ -1657,6 +1657,36 @@ void dir_briefline(char *tstr, XATTR *att)
  * If there is no content, produce a string of spaces.
  */
 
+/*
+ * APJ-OS: how a name is SHOWN - capital first letter, the rest lower case
+ * ("BALL.CFG", "STBox" -> "Ball.cfg", "Stbox"). Display only: the name on
+ * disk, and everything that opens, copies or renames, is untouched (the
+ * FAT, HOSTFS and RAM drives match names without regard to case anyway).
+ * Off with 'ncas 0' in teradesk.inf.
+ */
+
+void dir_dispcase(char *s)
+{
+	bool first = TRUE;
+
+	if (!options.ncase || s == NULL)
+		return;
+
+	for (; *s; s++)
+	{
+		char c = *s;
+
+		if (first)
+		{
+			if (c >= 'a' && c <= 'z')
+				*s = (char) (c - 'a' + 'A');
+			first = FALSE;
+		} else if (c >= 'A' && c <= 'Z')
+			*s = (char) (c - 'A' + 'a');
+	}
+}
+
+
 void dir_line(DIR_WINDOW *dw, char *s, _WORD item)
 {
 	NDTA *h;							/* pointer to directory item data */
@@ -1682,6 +1712,7 @@ void dir_line(DIR_WINDOW *dw, char *s, _WORD item)
 	static const char mark[] = { ' ', ' ', ' ', ' ', '\007', '-', ' ', '\007', ' ', ' ' };
 
 	mode_t hmode;
+	VLNAME dname;						/* the name as shown (dir_dispcase) */
 
 
 	if (item < dw->nvisible)
@@ -1696,7 +1727,9 @@ void dir_line(DIR_WINDOW *dw, char *s, _WORD item)
 		*d++ = mark[h->tgt_type];
 		*d++ = ' ';
 
-		p = h->name;
+		strsncpy(dname, h->name, sizeof(dname));
+		dir_dispcase(dname);
+		p = dname;
 		i = 0;
 
 		/* This will modify display of ".." in all filesystems now */
@@ -2013,6 +2046,7 @@ OBJECT *make_tree(DIR_WINDOW *dw, _WORD sc,	/* first icon column to display */
 #else
 				strcpy(labels[i], h->name);	/* shorter, and safe in single-TOS */
 #endif
+				dir_dispcase(labels[i]);
 				set_obji
 					(obj,
 					 oi++,

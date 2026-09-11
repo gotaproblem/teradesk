@@ -2104,6 +2104,7 @@ void dsk_insticon(WINDOW *w, _WORD n, _WORD *list)
 #else
 				strcpy(iconlabel, nameonly);	/* shorter, and safe in single-TOS */
 #endif
+				dir_dispcase(iconlabel);	/* the default label, as names are shown */
 				icon_no = icnt_geticon(nameonly, itype, ttype);
 				strsncpy(dirname, name, sizeof(VLNAME));
 				button = AFILE;
@@ -2447,6 +2448,7 @@ static bool icn_copy(WINDOW *dw,		/* pointer to destination window */
 #else
 		strcpy(tolabel, nameonly);	/* shorter, and safe in single-TOS */
 #endif
+		dir_dispcase(tolabel);			/* the label, as names are shown */
 		icon = icnt_geticon(nameonly, type, ttype);
 		add_icon(type, ttype, link, icon, tolabel, 0, ix, iy, TRUE, fname);
 		incr_pos(&ix, &iy);

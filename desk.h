@@ -188,6 +188,7 @@ typedef struct
 	VLNAME psdir;				/* directory scanned for the PiSTorm menu */
 	VLNAME wallp;				/* wallpaper image path (PNG/JPG) */
 	VLNAME startp;				/* taskbar start button image (PNG/JPG), empty = squares */
+	_WORD ncase;				/* show names as "Name.ext" (display only): 1 on, 0 real case */
 } Options;
 
 /* sentinel: this ws_cfg slot has never been set by the settings page */

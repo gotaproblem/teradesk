@@ -118,6 +118,7 @@ void dir_seticons(WINDOW *w);
 void dir_autoselect(DIR_WINDOW *w);
 void dir_briefline(char *tstr, XATTR *att);
 void dir_line(DIR_WINDOW *dw, char *s, _WORD item);
+void dir_dispcase(char *s);		/* "BALL.CFG" -> "Ball.cfg" for display (options.ncase) */
 void dir_disp_mode(WINDOW *w);
 void dir_mode(WINDOW *w);
 void dir_newdir( WINDOW *w );
