@@ -1208,7 +1208,7 @@ static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 		x >= tb_jitr.g_x && x < tb_jitr.g_x + tb_jitr.g_w &&
 		y >= tb_jitr.g_y && y < tb_jitr.g_y + tb_jitr.g_h)
 	{
-		mn_toggle();
+		mn_toggle(&tb_jitr);
 		return;
 	}
 

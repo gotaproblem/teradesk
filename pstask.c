@@ -621,7 +621,7 @@ static void mn_calcsize(GRECT *size)
 }
 
 
-void mn_open(void)
+void mn_open(const GRECT *from)
 {
 	GRECT size;
 	int error;
@@ -638,11 +638,20 @@ void mn_open(void)
 
 	mn_calcsize(&size);
 
-	/* Home position: bottom-left of the desktop, directly above the
-	 * PiSTorm button on the taskbar it was opened from */
+	/* Home position: at the bottom of the desktop, centred over the
+	 * taskbar button it was opened from and kept on the screen */
 
 	size.g_x = xd_desk.g_x;
 	size.g_y = xd_desk.g_y + xd_desk.g_h - size.g_h;
+
+	if (from && from->g_w > 0)
+	{
+		size.g_x = from->g_x + from->g_w / 2 - size.g_w / 2;
+		if (size.g_x + size.g_w > xd_desk.g_x + xd_desk.g_w)
+			size.g_x = xd_desk.g_x + xd_desk.g_w - size.g_w;
+		if (size.g_x < xd_desk.g_x)
+			size.g_x = xd_desk.g_x;
+	}
 
 	mn_used_cw = mn_font.cw;
 	mn_used_ch = mn_font.ch;
@@ -728,12 +737,12 @@ void mn_close(void)
 }
 
 
-void mn_toggle(void)
+void mn_toggle(const GRECT *from)
 {
 	if (mn_win != NULL)
 		mn_close();
 	else
-		mn_open();
+		mn_open(from);
 }
 
 

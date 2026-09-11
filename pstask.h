@@ -31,8 +31,8 @@
  * Both refresh from the taskbar's 500 ms tick.
  */
 
-void mn_open(void);						/* open (or top) the JIT panel */
-void mn_toggle(void);					/* JIT button click */
+void mn_open(const GRECT *from);			/* open (or top) the JIT panel above "from" */
+void mn_toggle(const GRECT *from);		/* JIT button click (the button's rect) */
 void mn_tick(void);						/* periodic refresh while open */
 void mn_close(void);					/* close the panel */
 
