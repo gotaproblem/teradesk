@@ -512,6 +512,7 @@ static void mn_contents(GRECT *work)
 static void mn_draw(GRECT *area)
 {
 	GRECT r1, r2, in, work;
+	bool hide;
 
 	if (mn_win == NULL)
 		return;
@@ -521,7 +522,7 @@ static void mn_draw(GRECT *area)
 	r1 = (area != NULL) ? *area : work;
 
 	xd_begupdate();
-	xd_mouse_off();
+	hide = tb_mouse_off_near(&r1);		/* not wherever the pointer is */
 
 	xw_getfirst(mn_win, &r2);
 
@@ -538,7 +539,8 @@ static void mn_draw(GRECT *area)
 		xw_getnext(mn_win, &r2);
 	}
 
-	xd_mouse_on();
+	if (hide)
+		xd_mouse_on();
 	xd_endupdate();
 }
 
@@ -838,6 +840,7 @@ static void sm_contents(GRECT *work)
 static void sm_draw(GRECT *area)
 {
 	GRECT r1, r2, in, work;
+	bool hide;
 
 	if (sm_win == NULL)
 		return;
@@ -847,7 +850,7 @@ static void sm_draw(GRECT *area)
 	r1 = (area != NULL) ? *area : work;
 
 	xd_begupdate();
-	xd_mouse_off();
+	hide = tb_mouse_off_near(&r1);		/* not wherever the pointer is */
 
 	xw_getfirst(sm_win, &r2);
 
@@ -864,7 +867,8 @@ static void sm_draw(GRECT *area)
 		xw_getnext(sm_win, &r2);
 	}
 
-	xd_mouse_on();
+	if (hide)
+		xd_mouse_on();
 	xd_endupdate();
 }
 
@@ -1172,6 +1176,7 @@ static void st_contents(GRECT *work)
 static void st_draw(WINDOW *w, GRECT *area)
 {
 	GRECT r1, r2, in, work;
+	bool hide;
 
 	(void) area;
 
@@ -1182,7 +1187,7 @@ static void st_draw(WINDOW *w, GRECT *area)
 	r1 = work;
 
 	xd_begupdate();
-	xd_mouse_off();
+	hide = tb_mouse_off_near(&r1);		/* not wherever the pointer is */
 	xw_getfirst(st_win, &r2);
 
 	while (r2.g_w != 0 && r2.g_h != 0)
@@ -1198,7 +1203,8 @@ static void st_draw(WINDOW *w, GRECT *area)
 		xw_getnext(st_win, &r2);
 	}
 
-	xd_mouse_on();
+	if (hide)
+		xd_mouse_on();
 	xd_endupdate();
 
 	(void) w;

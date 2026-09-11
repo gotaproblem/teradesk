@@ -1113,6 +1113,30 @@ static void tb_drawpart(GRECT *clip)
  * If area is NULL the whole bar is redrawn.
  */
 
+/*
+ * Hide the mouse pointer for a redraw of r only if the pointer is over or
+ * next to r (the margin covers any pointer shape's hot spot offset).
+ * Returns TRUE if it was hidden - pass that to the matching show.
+ * For live panels that repaint every tick: hiding the pointer wherever it
+ * was made it blink in step with their text.
+ */
+
+bool tb_mouse_off_near(GRECT *r)
+{
+	_WORD mx, my, dummy;
+
+	graf_mkstate(&mx, &my, &dummy, &dummy);
+
+	if (mx + 32 >= r->g_x && mx - 32 < r->g_x + r->g_w &&
+		my + 32 >= r->g_y && my - 32 < r->g_y + r->g_h)
+	{
+		xd_mouse_off();
+		return TRUE;
+	}
+	return FALSE;
+}
+
+
 static void tb_update(GRECT *area)
 {
 	GRECT r1, r2, in;
@@ -1127,18 +1151,8 @@ static void tb_update(GRECT *area)
 
 	/* Hide the pointer only if it is over (or next to) what is about to
 	 * be drawn: the bar repaints every few ticks, and hiding it wherever
-	 * it was made the mouse blink across the whole screen. The margin
-	 * covers any pointer shape's hot spot offset. */
-	{
-		_WORD mx, my, dummy;
-
-		graf_mkstate(&mx, &my, &dummy, &dummy);
-		hide = (mx + 32 >= r1.g_x && mx - 32 < r1.g_x + r1.g_w &&
-				my + 32 >= r1.g_y && my - 32 < r1.g_y + r1.g_h);
-	}
-
-	if (hide)
-		xd_mouse_off();
+	 * it was made the mouse blink across the whole screen. */
+	hide = tb_mouse_off_near(&r1);
 
 	xw_getfirst(tb_window, &r2);
 
@@ -1253,6 +1267,7 @@ static void tip_draw(WINDOW *w, GRECT *area)
 {
 	GRECT r1, r2, in, work;
 	_WORD f[10];
+	bool hide;
 
 	(void) area;
 
@@ -1265,7 +1280,7 @@ static void tip_draw(WINDOW *w, GRECT *area)
 
 	TIPDBG("tip_draw");
 	xd_begupdate();
-	xd_mouse_off();
+	hide = tb_mouse_off_near(&r1);		/* live tips repaint every tick */
 
 	xw_getfirst(tip_win, &r2);
 
@@ -1312,7 +1327,8 @@ static void tip_draw(WINDOW *w, GRECT *area)
 		xw_getnext(tip_win, &r2);
 	}
 
-	xd_mouse_on();
+	if (hide)
+		xd_mouse_on();
 	xd_endupdate();
 	TIPDBG("tip_draw done");
 
