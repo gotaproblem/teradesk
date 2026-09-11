@@ -211,6 +211,10 @@ static GRECT tb_appr[TB_MAXAPPS];			/* screen rects of the app tiles */
 static char tb_noname[1];					/* empty label for the icon copies */
 static GRECT tb_rightr;						/* dock: the right-hand group (pills..clock) */
 static bool tb_full = TRUE;					/* dock: next repaint must be the whole bar */
+static GRECT tb_midr;						/* dock: the tile area (start button..pills) */
+static bool tb_mid = FALSE;					/* dock: the tile list changed - repaint tb_midr */
+static GRECT tb_pend[2];					/* dock: single tiles to repaint (top app moved) */
+static _WORD tb_npend = 0;
 
 
 /*
@@ -597,6 +601,8 @@ static bool tb_scanapps(void)
 				na[n].mins = 0;
 				strsncpy(na[n].name, name, sizeof(na[n].name));
 				strsncpy(na[n].title, name, sizeof(na[n].title));
+				na[n].path[0] = 0;
+				na[n].text = FALSE;
 				n++;
 			}
 		}
@@ -634,7 +640,7 @@ static bool tb_scanapps(void)
 	if (wind_get(0, WF_TOP, &th, &top, &dummy, &dummy) == 0 || th <= 0)
 		top = -1;
 
-	if (n != tb_napps || top != tb_topapp)
+	if (n != tb_napps)
 		changed = TRUE;
 
 	for (i = 0; i < n; i++)
@@ -656,6 +662,21 @@ static bool tb_scanapps(void)
 		tb_apps[i].mins = na[i].mins;
 		strcpy(tb_apps[i].title, na[i].title);
 		strcpy(tb_apps[i].path, na[i].path);
+	}
+
+	if (changed)
+		tb_mid = TRUE;					/* tiles added, removed or changed */
+	else if (top != tb_topapp)
+	{
+		/* only the front application changed: its old and new tiles */
+
+		for (i = 0; i < n && tb_npend < 2; i++)
+		{
+			if (tb_apps[i].win == 0 && (tb_apps[i].id == top || tb_apps[i].id == tb_topapp) &&
+				tb_appr[i].g_w > 0)
+				tb_pend[tb_npend++] = tb_appr[i];
+		}
+		changed = TRUE;
 	}
 
 	tb_napps = n;
@@ -967,6 +988,11 @@ static void tb_drawdock(GRECT *clip)
 
 		total = shown * tile + (shown - 1) * gap;
 		x = mid - total / 2;
+
+		tb_midr.g_x = tb_badge.g_x + tb_badge.g_w;
+		tb_midr.g_y = tb_rect.g_y;
+		tb_midr.g_w = rightx - tb_midr.g_x;
+		tb_midr.g_h = tb_rect.g_h;
 
 		for (i = 0; i < TB_MAXAPPS; i++)
 			tb_appr[i].g_w = 0;
@@ -1355,7 +1381,7 @@ static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 					appl_control(-1, 118, (void *) (long) tb_apps[i].win);
 				else if (tb_apps[i].mins == 0 || appl_control(-1, 119, (void *) (long) tb_apps[i].id) == 0)
 					appl_control(tb_apps[i].id, 12, NULL);	/* APC_TOP */
-				tb_dirty = TRUE;
+				tb_mid = TRUE;
 				return;
 			}
 		}
@@ -1997,11 +2023,10 @@ static bool tb_build(void)
 
 	/* dock: running applications */
 
-	if (bt_fluent() && tb_scanapps())
-	{
-		changed = TRUE;
-		tb_full = TRUE;					/* tiles moved: the whole dock */
-	}
+	/* (repainted by tb_tick() as just the tiles, see tb_mid/tb_pend) */
+
+	if (bt_fluent())
+		tb_scanapps();
 
 	/* keyboard desk switches repaint the pager on the next tick */
 
@@ -2283,6 +2308,37 @@ void tb_track(XDEVENT *ev)
  * Handle a MU_M1 event: re-evaluate what the mouse is over
  */
 
+/* The bar area a hover target's face covers (FALSE: none) */
+
+static bool tb_tgtrect(_WORD tgt, GRECT *r)
+{
+	const GRECT *src = NULL;
+
+	if (tgt == TB_HOV_BADGE)
+		src = &tb_badge;
+	else if (tgt == TB_HOV_CLOCK)
+		src = &tb_clockr;
+	else if (tgt == TB_HOV_TEMP)
+		src = &tb_tempr;
+	else if (tgt == TB_HOV_APJ)
+		src = &tb_apjr;
+	else if (tgt == TB_HOV_JIT)
+		src = &tb_jitr;
+	else if (tgt >= TB_HOV_APP && tgt < TB_HOV_APP + TB_MAXAPPS)
+		src = &tb_appr[tgt - TB_HOV_APP];
+
+	if (src == NULL || src->g_w <= 0)
+		return FALSE;
+
+	*r = *src;
+	r->g_x -= 2;
+	r->g_y -= 2;
+	r->g_w += 4;
+	r->g_h += 4;
+	return TRUE;
+}
+
+
 void tb_hover(_WORD x, _WORD y)
 {
 	_WORD tgt = TB_HOV_NONE;
@@ -2344,6 +2400,8 @@ void tb_hover(_WORD x, _WORD y)
 
 	if (tgt != tb_hovtgt)
 	{
+		_WORD oldtgt = tb_hovtgt;
+
 #ifdef TIP_DEBUG
 		{
 			char b[128];
@@ -2359,9 +2417,18 @@ void tb_hover(_WORD x, _WORD y)
 		tb_dwell = 0;
 		tip_close();					/* tooltip belongs to the old target */
 
+		/* the dock shows hover faces - at once, not on the next 500 ms
+		 * tick, and only the two targets: repainting the whole bar (all
+		 * the icons) on every hover change made it flicker */
 		if (bt_fluent())
-			tb_update(NULL);			/* the dock shows hover faces - at once,
-										 * not on the next 500 ms tick */
+		{
+			GRECT hr;
+
+			if (tb_tgtrect(oldtgt, &hr))
+				tb_update(&hr);
+			if (tb_tgtrect(tgt, &hr))
+				tb_update(&hr);
+		}
 	}
 }
 
@@ -2486,16 +2553,34 @@ void tb_tick(void)
 		tb_dirty = TRUE;
 	}
 
-	if (tb_build() || tb_dirty)
 	{
-		/* dock: a pills/clock-only change repaints just that group - the
-		 * app icons (blended by XaAES) are the expensive part, and JIT %
-		 * changes on nearly every tick */
-		if (bt_fluent() && !tb_full && !tb_dirty && tb_rightr.g_w > 0)
-			tb_update(&tb_rightr);
-		else
-			tb_update(NULL);
-		tb_full = FALSE;
+		bool ch = tb_build();
+
+		if (ch || tb_dirty || tb_mid || tb_npend > 0)
+		{
+			/* dock: repaint only what changed - the pills/clock group (JIT %
+			 * changes on nearly every tick), the tile area when the list
+			 * changed, or just the old and new front application's tiles.
+			 * The app icons (blended by XaAES) are the expensive part, and
+			 * a whole-bar repaint shows as a flicker. */
+			if (!bt_fluent() || tb_full || tb_dirty || tb_rightr.g_w <= 0 || tb_midr.g_w <= 0)
+				tb_update(NULL);
+			else
+			{
+				_WORD k;
+
+				if (tb_mid)
+					tb_update(&tb_midr);
+				else
+					for (k = 0; k < tb_npend; k++)
+						tb_update(&tb_pend[k]);
+				if (ch)
+					tb_update(&tb_rightr);
+			}
+			tb_full = FALSE;
+			tb_mid = FALSE;
+			tb_npend = 0;
+		}
 	}
 
 	/* refresh the monitor window, if open */
