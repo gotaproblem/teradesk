@@ -967,7 +967,8 @@ _WORD xw_hndlmessage(_WORD *message)
 	{
 	case WM_REDRAW:
 		xw_redraw_menu(w, w->xw_bar, (GRECT *) m4);
-		func->wd_redraw(w, (GRECT *) m4);
+		if (func->wd_redraw)
+			func->wd_redraw(w, (GRECT *) m4);
 		break;
 	case WM_CLOSED:
 		if (xd_dialogs)
@@ -981,45 +982,61 @@ _WORD xw_hndlmessage(_WORD *message)
 				return FALSE;		/* closer in dialog window handled differently */
 			}
 		}
-		func->wd_closed(w, 0);
+		if (func->wd_closed)
+			func->wd_closed(w, 0);
 		break;
 	case WM_FULLED:
-		func->wd_fulled(w, xe_mbshift);
+		if (func->wd_fulled)
+			func->wd_fulled(w, xe_mbshift);
 		break;
 	case WM_ARROWED:
 		/* a wheeled mouse can send this even if there are no arrow widgets */
-		func->wd_arrowed(w, *m4);
+		if (func->wd_arrowed)
+			func->wd_arrowed(w, *m4);
 		break;
 	case WM_HSLID:
-		func->wd_hslider(w, *m4);
+		if (func->wd_hslider)
+			func->wd_hslider(w, *m4);
 		break;
 	case WM_VSLID:
-		func->wd_vslider(w, *m4);
+		if (func->wd_vslider)
+			func->wd_vslider(w, *m4);
 		break;
 	case WM_SIZED:
-		func->wd_sized(w, (GRECT *) m4);
+		/* APJ-OS: XaAES sends WM_SIZED to every window of a client whose
+		 * chrome it re-lays-out (theme commit/drop); windows without a
+		 * handler - the taskbar, its tooltip and panels - have NULL here,
+		 * and the call jumped to address 0 */
+		if (func->wd_sized)
+			func->wd_sized(w, (GRECT *) m4);
 		break;
 	case WM_MOVED:
-		func->wd_moved(w, (GRECT *) m4);
+		if (func->wd_moved)
+			func->wd_moved(w, (GRECT *) m4);
 		break;
 	case WM_TOPPED:
-		wwfunc->wd_topped(ww);
+		if (wwfunc->wd_topped)
+			wwfunc->wd_topped(ww);
 		break;
 	case WM_NEWTOP:
-		wwfunc->wd_newtop(ww);
+		if (wwfunc->wd_newtop)
+			wwfunc->wd_newtop(ww);
 		break;
 	case WM_ONTOP:
 	case WM_UNTOPPED:
 		xw_top();					/* just find the new top window ? */
 		break;
 	case WM_BOTTOMED:
-		func->wd_bottomed(w);
+		if (func->wd_bottomed)
+			func->wd_bottomed(w);
 		break;
 	case WM_ICONIFY:
-		func->wd_iconify(w, (GRECT *) m4);
+		if (func->wd_iconify)
+			func->wd_iconify(w, (GRECT *) m4);
 		break;
 	case WM_UNICONIFY:
-		func->wd_uniconify(w, (GRECT *) m4);
+		if (func->wd_uniconify)
+			func->wd_uniconify(w, (GRECT *) m4);
 		break;
 	default:
 		return FALSE;
