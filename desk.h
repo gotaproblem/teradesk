@@ -187,6 +187,7 @@ typedef struct
 								   ws_cfg id 1..8; WSCFG_UNSET = never set */
 	VLNAME psdir;				/* directory scanned for the PiSTorm menu */
 	VLNAME wallp;				/* wallpaper image path (PNG/JPG) */
+	VLNAME startp;				/* taskbar start button image (PNG/JPG), empty = squares */
 } Options;
 
 /* sentinel: this ws_cfg slot has never been set by the settings page */

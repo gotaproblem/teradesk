@@ -191,6 +191,7 @@ static CfgEntry const Options_table[] = {
 	CFG_S("psdr", options.psdir),	/* PiSTorm apps directory */
 	CFG_S("wall", options.wallp),	/* wallpaper image (PNG/JPG) */
 	CFG_D("walm", options.wallm),	/* wallpaper mode: 0 stretch, 1 fit */
+	CFG_S("strt", options.startp),	/* taskbar start button image (PNG/JPG) */
 	CFG_D("thm", options.thm),		/* Bespoke UI theme index */
 	/* settings page: live XaAES UI config (ws_cfg ids; WSCFG_UNSET = unset) */
 	CFG_D("wsc1", options.wscfg[1]),	/* drag past top    */

@@ -462,6 +462,180 @@ static bool tb_inrect(GRECT *r, _WORD x, _WORD y)
 }
 
 
+/* ---- the start button image -------------------------------------------- */
+
+/*
+ * 'strt' in teradesk.inf names a PNG or JPG (any path PSIMG can read, as
+ * for the wallpaper). The emulator decodes and scales it to the button
+ * glyph size; here its red parts become the button's shape - each
+ * pixel's opacity is how much redder than green/blue it is, so the
+ * background around a red mark drops out with soft edges - drawn flat
+ * in the theme accent over the button face. Anything else (no key, no
+ * PSIMG, not 16/32 bpp) keeps the four squares.
+ */
+
+#define TB_PSIMG_LOAD	1L
+#define TB_PSIMG_FIT	1
+
+static unsigned char *tb_stamp = NULL;		/* opacity, g x g */
+static void *tb_stampdev = NULL;			/* composited, screen format */
+static _WORD tb_stampg = 0;					/* its size; 0 = none */
+static _WORD tb_stamptry = 0;				/* size last attempted */
+static long tb_stampfg = -1L, tb_stampbg = -1L;
+
+
+static void tb_stampfree(void)
+{
+	if (tb_stamp != NULL)
+		Mfree(tb_stamp);
+	if (tb_stampdev != NULL)
+		Mfree(tb_stampdev);
+	tb_stamp = NULL;
+	tb_stampdev = NULL;
+	tb_stampg = 0;
+	tb_stampfg = tb_stampbg = -1L;
+}
+
+
+/* Load (once per glyph size) the image as an opacity mask; TRUE = ready */
+
+static bool tb_stampload(_WORD g)
+{
+	struct nf_ops *ops;
+	unsigned char *rgb, *a;
+	long id, n, i;
+
+	if (tb_stampg == g && tb_stamp != NULL)
+		return TRUE;
+	if (tb_stamptry == g)
+		return FALSE;					/* failed at this size already */
+
+	tb_stampfree();
+	tb_stamptry = g;
+
+	if (options.startp[0] == 0 || (xd_nplanes != 16 && xd_nplanes != 32))
+		return FALSE;
+	if ((ops = nf_init()) == NULL || (id = nf_get_id("PSIMG")) == 0)
+		return FALSE;
+
+	n = (long) g * (long) g;
+	rgb = (unsigned char *) Malloc(n * 4L);
+	if ((long) rgb <= 0)
+		return FALSE;
+
+	if (ops->call(id | TB_PSIMG_LOAD,
+				  (long) (unsigned long) virt_to_phys(options.startp),
+				  (long) (unsigned long) virt_to_phys(rgb),
+				  (long) g, (long) g, 32L, (long) TB_PSIMG_FIT) != 0)
+	{
+		Mfree(rgb);
+		return FALSE;
+	}
+
+	/* 00 RR GG BB -> opacity from redness, in place (a[i] <= rgb[4i]) */
+
+	a = rgb;
+	for (i = 0; i < n; i++)
+	{
+		_WORD r = rgb[4 * i + 1], gg = rgb[4 * i + 2], b = rgb[4 * i + 3];
+		_WORD d = r - (gg > b ? gg : b);
+
+		a[i] = (unsigned char) (d <= 24 ? 0 : d >= 88 ? 255 : (d - 24) * 4);
+	}
+
+	tb_stamp = (unsigned char *) Malloc(n);
+	tb_stampdev = (void *) Malloc(n * (long) (xd_nplanes / 8));
+
+	if ((long) tb_stamp <= 0 || (long) tb_stampdev <= 0)
+	{
+		if ((long) tb_stamp > 0)
+			Mfree(tb_stamp);
+		if ((long) tb_stampdev > 0)
+			Mfree(tb_stampdev);
+		tb_stamp = NULL;
+		tb_stampdev = NULL;
+		Mfree(rgb);
+		return FALSE;
+	}
+
+	memcpy(tb_stamp, a, (size_t) n);
+	Mfree(rgb);
+
+	tb_stampg = g;
+	return TRUE;
+}
+
+
+/* Draw the glyph at (x, y) in colour fg over background bg (0xRRGGBB) */
+
+static void tb_stampdraw(_WORD x, _WORD y, long fg, long bg, GRECT *clip)
+{
+	_WORD g = tb_stampg, pxy[8];
+	GRECT r, in;
+	MFDB src, dst;
+
+	if (fg != tb_stampfg || bg != tb_stampbg)
+	{
+		unsigned char *d = (unsigned char *) tb_stampdev;
+		_WORD fr = (_WORD) ((fg >> 16) & 0xFF), fgc = (_WORD) ((fg >> 8) & 0xFF), fb = (_WORD) (fg & 0xFF);
+		_WORD br = (_WORD) ((bg >> 16) & 0xFF), bgc = (_WORD) ((bg >> 8) & 0xFF), bb = (_WORD) (bg & 0xFF);
+		long i, n = (long) g * (long) g;
+
+		for (i = 0; i < n; i++)
+		{
+			unsigned _WORD al = tb_stamp[i], ia = 255 - al;
+			unsigned _WORD cr = (unsigned _WORD) ((fr * (long) al + br * (long) ia) / 255);
+			unsigned _WORD cg = (unsigned _WORD) ((fgc * (long) al + bgc * (long) ia) / 255);
+			unsigned _WORD cb = (unsigned _WORD) ((fb * (long) al + bb * (long) ia) / 255);
+
+			if (xd_nplanes == 32)
+			{
+				*d++ = 0;
+				*d++ = (unsigned char) cr;
+				*d++ = (unsigned char) cg;
+				*d++ = (unsigned char) cb;
+			} else
+			{
+				unsigned _WORD p = (unsigned _WORD) (((cr >> 3) << 11) | ((cg >> 2) << 5) | (cb >> 3));
+
+				*d++ = (unsigned char) (p >> 8);
+				*d++ = (unsigned char) p;
+			}
+		}
+		tb_stampfg = fg;
+		tb_stampbg = bg;
+	}
+
+	r.g_x = x;
+	r.g_y = y;
+	r.g_w = g;
+	r.g_h = g;
+	in = r;
+	if (!xd_rcintersect(&r, clip, &in))
+		return;
+
+	pxy[0] = in.g_x - x;
+	pxy[1] = in.g_y - y;
+	pxy[2] = pxy[0] + in.g_w - 1;
+	pxy[3] = pxy[1] + in.g_h - 1;
+	pxy[4] = in.g_x;
+	pxy[5] = in.g_y;
+	pxy[6] = in.g_x + in.g_w - 1;
+	pxy[7] = in.g_y + in.g_h - 1;
+
+	src.fd_addr = tb_stampdev;
+	src.fd_w = g;
+	src.fd_h = g;
+	src.fd_wdwidth = (g + 15) / 16;		/* g is a multiple of 16: no row padding */
+	src.fd_stand = 0;
+	src.fd_nplanes = xd_nplanes;
+	src.fd_r1 = src.fd_r2 = src.fd_r3 = 0;
+	dst.fd_addr = NULL;
+
+	vro_cpyfm(vdi_handle, S_ONLY, pxy, &src, &dst);
+}
+
+
 /* The dock tile under (x, y), or -1 */
 
 static _WORD tb_apphit(_WORD x, _WORD y)
@@ -789,6 +963,23 @@ static void tb_drawdock(GRECT *clip)
 	if (tb_hovtgt == TB_HOV_BADGE)
 		tb_rfill(&tb_badge, t->dark);
 
+	/* a configured image in the accent colour (a multiple of 16 px,
+	 * about two thirds of the tile), else four accent squares */
+
+	{
+		_WORD sg = (tile * 30 / 44 + 8) & ~15;
+
+		if (sg < 16)
+			sg = 16;
+		if (tb_stampload(sg))
+		{
+			tb_stampdraw(tb_badge.g_x + (tile - sg) / 2, tb_badge.g_y + (tile - sg) / 2,
+						 bt_rgb(BT_R_ACCENT),
+						 bt_rgb(tb_hovtgt == TB_HOV_BADGE ? BT_R_DARK : BT_R_PANEL), clip);
+			goto badge_done;
+		}
+	}
+
 	{
 		_WORD g = tile * 24 / 44, q = (g - g / 6) / 2, gap = g - 2 * q;
 		GRECT sq;
@@ -801,6 +992,7 @@ static void tb_drawdock(GRECT *clip)
 			tb_rfill(&sq, t->accent);
 		}
 	}
+  badge_done:;
 
 	/* right, from the edge inwards: two-line clock, pager, pills */
 
@@ -2599,6 +2791,8 @@ void tb_close(void)
 	mn_close();							/* the JIT panel, */
 	sm_close();							/* and the system menu too */
 	st_close();							/* and the settings page */
+	tb_stampfree();						/* the start button image */
+	tb_stamptry = 0;
 
 	if (tb_dockreg)						/* minimised windows back to the desktop */
 	{
