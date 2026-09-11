@@ -193,6 +193,8 @@ static _WORD tb_napps = 0;
 static _WORD tb_topapp = -1;				/* owner of the top window */
 static GRECT tb_appr[TB_MAXAPPS];			/* screen rects of the app tiles */
 static char tb_noname[1];					/* empty label for the icon copies */
+static GRECT tb_rightr;						/* dock: the right-hand group (pills..clock) */
+static bool tb_full = TRUE;					/* dock: next repaint must be the whole bar */
 
 
 /*
@@ -787,6 +789,13 @@ static void tb_drawdock(GRECT *clip)
 		xx = x - w;
 		rightx = xx;
 
+		/* what a pills/clock-only change repaints: the group, plus room
+		 * for its texts to have been a few characters longer before */
+		tb_rightr.g_x = rightx - 4 * tb_cw;
+		tb_rightr.g_y = tb_rect.g_y;
+		tb_rightr.g_w = tb_rect.g_x + tb_rect.g_w - tb_rightr.g_x;
+		tb_rightr.g_h = tb_rect.g_h;
+
 		for (k = 0; k < 5; k++)
 		{
 			_WORD c = role[k];
@@ -1095,6 +1104,7 @@ static void tb_drawpart(GRECT *clip)
 static void tb_update(GRECT *area)
 {
 	GRECT r1, r2, in;
+	bool hide;
 
 	if (tb_window == NULL)
 		return;
@@ -1102,7 +1112,21 @@ static void tb_update(GRECT *area)
 	r1 = (area != NULL) ? *area : tb_rect;
 
 	xd_begupdate();
-	xd_mouse_off();
+
+	/* Hide the pointer only if it is over (or next to) what is about to
+	 * be drawn: the bar repaints every few ticks, and hiding it wherever
+	 * it was made the mouse blink across the whole screen. The margin
+	 * covers any pointer shape's hot spot offset. */
+	{
+		_WORD mx, my, dummy;
+
+		graf_mkstate(&mx, &my, &dummy, &dummy);
+		hide = (mx + 32 >= r1.g_x && mx - 32 < r1.g_x + r1.g_w &&
+				my + 32 >= r1.g_y && my - 32 < r1.g_y + r1.g_h);
+	}
+
+	if (hide)
+		xd_mouse_off();
 
 	xw_getfirst(tb_window, &r2);
 
@@ -1114,7 +1138,8 @@ static void tb_update(GRECT *area)
 		xw_getnext(tb_window, &r2);
 	}
 
-	xd_mouse_on();
+	if (hide)
+		xd_mouse_on();
 	xd_endupdate();
 
 	tb_dirty = FALSE;
@@ -1812,7 +1837,10 @@ static bool tb_build(void)
 	/* dock: running applications */
 
 	if (bt_fluent() && tb_scanapps())
+	{
 		changed = TRUE;
+		tb_full = TRUE;					/* tiles moved: the whole dock */
+	}
 
 	/* keyboard desk switches repaint the pager on the next tick */
 
@@ -1823,6 +1851,7 @@ static bool tb_build(void)
 		{
 			last_desk = dsk_current();
 			changed = TRUE;
+			tb_full = TRUE;
 		}
 	}
 
@@ -2280,7 +2309,16 @@ void tb_tick(void)
 	}
 
 	if (tb_build() || tb_dirty)
-		tb_update(NULL);
+	{
+		/* dock: a pills/clock-only change repaints just that group - the
+		 * app icons (blended by XaAES) are the expensive part, and JIT %
+		 * changes on nearly every tick */
+		if (bt_fluent() && !tb_full && !tb_dirty && tb_rightr.g_w > 0)
+			tb_update(&tb_rightr);
+		else
+			tb_update(NULL);
+		tb_full = FALSE;
+	}
 
 	/* refresh the monitor window, if open */
 
