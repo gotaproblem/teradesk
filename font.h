@@ -35,6 +35,7 @@
 
 extern XDFONT def_font;
 
+_WORD fnt_syspoints(void);		/* APJ-OS: AES system font size (xaaes.cnf), 0 = unknown */
 void fnt_setfont(_WORD font, _WORD height, XDFONT *data);
 bool fnt_dialog(_WORD title, XDFONT *font, bool prop);
 void fnt_mdialog(_WORD ap_id, _WORD win, _WORD id, _WORD size, _WORD colour, _WORD effect, _WORD prop);

@@ -174,6 +174,12 @@ void cfg_wdfont(XFILE *file, int lvl, int io, int *error)
 
 	if ((io == CFG_LOAD) && (*error == 0) && thisw.font.size)
 	{
+		/* APJ-OS: the system font follows the AES's size (xaaes.cnf
+		 * STANDARD_POINT) instead of the size saved with it */
+
+		if (thisw.font.id == 1 && fnt_syspoints() > 0)
+			thisw.font.size = fnt_syspoints();
+
 		*cfg_font = thisw.font;
 		fnt_setfont(thisw.font.id, thisw.font.size, cfg_font);
 	}

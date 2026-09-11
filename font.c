@@ -77,6 +77,39 @@ static _WORD
  flblen = 0;
 
 
+/*
+ * APJ-OS: the point size of the AES system font, i.e. the size XaAES was
+ * told to use by STANDARD_POINT in xaaes.cnf. The AES reports only the
+ * character cell (graf_handle -> xd_fnt_w/xd_fnt_h), so find the system
+ * font size whose cell matches it. Returns 0 if none does.
+ * The system font (id 1) in a saved configuration follows this, so a
+ * font-size change is one line in xaaes.cnf and a reboot.
+ */
+
+_WORD fnt_syspoints(void)
+{
+	static _WORD pts = -1;
+	_WORD p, cw, ch, bw, bh;
+
+	if (pts >= 0)
+		return pts;
+
+	pts = 0;
+	vst_font(vdi_handle, 1);
+
+	for (p = 6; p <= 36; p++)
+	{
+		if (vst_point(vdi_handle, p, &cw, &ch, &bw, &bh) == p && bh == xd_fnt_h && bw == xd_fnt_w)
+		{
+			pts = p;
+			break;
+		}
+	}
+
+	return pts;
+}
+
+
 void fnt_setfont(_WORD font, _WORD height, XDFONT *data)
 {
 	data->id = vst_font(vdi_handle, font);
