@@ -237,6 +237,8 @@ static const _WORD gempen[4] = { G_WHITE, G_BLACK, G_LWHITE, G_LBLACK };
  * remap above does the theming as before. Role order = BT_R_*.
  */
 
+void dsk_workarea(void);				/* icon.c (icon.h needs half the desktop's headers) */
+
 static void bt_apjpush(const PRESET *p)
 {
 	_WORD i;
@@ -247,6 +249,7 @@ static void bt_apjpush(const PRESET *p)
 	if (!(p->pal && p->has_ext))
 	{
 		appl_control(-1, 112, NULL);
+		dsk_workarea();				/* menu bar back to stock height */
 		return;
 	}
 
@@ -262,6 +265,7 @@ static void bt_apjpush(const PRESET *p)
 
 	/* all roles in: reskin our open windows (chrome) and redraw */
 	appl_control(-1, 113, NULL);
+	dsk_workarea();					/* XaAES made the menu bar taller */
 }
 
 static void bt_gempens(const PRESET *p)

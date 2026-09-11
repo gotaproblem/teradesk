@@ -2575,6 +2575,49 @@ void icn_theme_labels(void)
 }
 
 
+/*
+ * APJ-OS: the desktop work area moved. XaAES makes the menu bar taller
+ * when the Fluent theme is committed (appl_control 113) and gives the
+ * height back when it is dropped (112), after this desktop has already
+ * read its work area. Follow the top edge: every desktop context's
+ * background tree moves with it (icons are relative to it, so they move
+ * too), the bottom edge - the taskbar strip - stays where it is.
+ */
+
+void dsk_workarea(void)
+{
+	GRECT w;
+	_WORD dy, d;
+
+	xw_getwork(NULL, &w);
+
+	dy = w.g_y - xd_desk.g_y;
+
+	if (dy == 0 || dy >= xd_desk.g_h)
+		return;
+
+	xd_desk.g_y += dy;
+	xd_desk.g_h -= dy;
+
+	for (d = 0; d < DSK_NDESKS; d++)
+	{
+		if (dsk_ctx[d].tree != NULL)
+		{
+			dsk_ctx[d].tree[0].ob_y = xd_desk.g_y;
+			dsk_ctx[d].tree[0].ob_height = xd_desk.g_h;
+		}
+	}
+
+	if (desktop != NULL)
+	{
+		desktop[0].ob_y = xd_desk.g_y;
+		desktop[0].ob_height = xd_desk.g_h;
+		set_maxicons();
+		regen_desktop(desktop);
+	}
+}
+
+
 void regen_desktop(OBJECT *desk_tree)
 {
 	wind_set_ptr_int(0, WF_NEWDESK, desk_tree, 0);
@@ -2912,6 +2955,53 @@ bool load_icons(void)
 		{
 			n_icons++;
 		} while ((icons[i++].ob_flags & OF_LASTOB) == 0);
+
+		/*
+		 * APJ-OS: label boxes for the system font. The icon resource
+		 * gives every label a 72x8 box under the image - sized for the
+		 * 6x6 small font. With the 1080p system font (12x24) XaAES draws
+		 * labels in that font, so an 8px box put the text over the
+		 * bottom of the image, the selection pill covered only a sliver,
+		 * and names wider than 72px hung off the left of their cell.
+		 * Size the box for INAME's 12 characters at the system font and
+		 * centre the image over it. Copies of these blocks (desktop and
+		 * window items) inherit the geometry. Classic fonts (16px and
+		 * under) keep the resource layout.
+		 */
+
+		if (xd_fnt_h > 16)
+		{
+			_WORD lw = 12 * xd_fnt_w;
+
+			for (i = 0; i < n_icons; i++)
+			{
+				OBJECT *o = &icons[i];
+				_WORD ty = o->ob_type & 0xFF;
+				ICONBLK *b;
+
+				if (ty != G_ICON && ty != G_CICON)
+					continue;
+
+				b = &o->ob_spec.ciconblk->monoblk;
+
+				if (b->ib_htext >= xd_fnt_h)
+					continue;
+
+				if (b->ib_wtext < lw)
+					b->ib_wtext = lw;
+				if (b->ib_wtext < b->ib_wicon)
+					b->ib_wtext = b->ib_wicon;
+
+				b->ib_xtext = 0;
+				b->ib_xicon = (b->ib_wtext - b->ib_wicon) / 2;
+				b->ib_ytext = b->ib_yicon + b->ib_hicon + 2;
+				b->ib_htext = xd_fnt_h;
+
+				if (o->ob_width < b->ib_wtext)
+					o->ob_width = b->ib_wtext;
+				o->ob_height = b->ib_ytext + b->ib_htext;
+			}
+		}
 
 		/* APJ-OS: the icon cell follows the icon size in the resource
 		 * (72x40 objects -> the classic 80x46 cell; a 48px set is 96x64
