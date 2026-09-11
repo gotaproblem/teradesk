@@ -1687,6 +1687,40 @@ void dir_dispcase(char *s)
 }
 
 
+/*
+ * APJ-OS: an icon label as shown - at most icn_labelchars() characters
+ * (longer names keep their start and end: "Bigge...prg"), then
+ * dir_dispcase(). t holds size bytes.
+ */
+
+void dir_iconlabel(const char *name, char *t, size_t size)
+{
+	size_t n = (size_t) icn_labelchars(), l;
+
+	if (n > size - 1)
+		n = size - 1;
+
+	cramped_name(name, t, size);		/* trims blanks */
+	l = strlen(t);
+
+	if (l > n)
+	{
+		VLNAME full;
+		size_t h, tail;
+
+		strsncpy(full, name, sizeof(full));
+		l = strlen(full);
+		h = (n - 3 + 1) / 2;
+		tail = n - 3 - h;
+		memcpy(t, full, h);
+		memcpy(t + h, "...", 3);
+		memcpy(t + h + 3, full + l - tail, tail);
+		t[n] = 0;
+	}
+	dir_dispcase(t);
+}
+
+
 void dir_line(DIR_WINDOW *dw, char *s, _WORD item)
 {
 	NDTA *h;							/* pointer to directory item data */
@@ -2042,11 +2076,11 @@ OBJECT *make_tree(DIR_WINDOW *dw, _WORD sc,	/* first icon column to display */
 				} else
 					selected = h->selected;
 #if _MINT_
-				cramped_name(h->name, labels[i], sizeof(INAME));
+				dir_iconlabel(h->name, labels[i], sizeof(INAME));
 #else
 				strcpy(labels[i], h->name);	/* shorter, and safe in single-TOS */
-#endif
 				dir_dispcase(labels[i]);
+#endif
 				set_obji
 					(obj,
 					 oi++,

@@ -63,6 +63,7 @@ void dsk_draw(void);
 void redraw_desk(GRECT *r);
 void regen_desktop(OBJECT *desk_tree);
 void dsk_areachanged(void);		/* APJ-OS: xd_desk changed - move the desktop trees */
+_WORD icn_labelchars(void);		/* APJ-OS: icon label width in characters */
 void dsk_workarea(void);		/* APJ-OS: follow a menu bar height change */
 void dsk_options(void);
 void set_dsk_background(_WORD pattern, _WORD colour);

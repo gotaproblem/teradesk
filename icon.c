@@ -164,6 +164,8 @@ static void dsk_do_update(void);
 static void set_dsk_obtype(_WORD type);
 
 static _WORD dsk_defaultpatt(void);
+static void icn_labelboxes(void);
+static void icn_autogrid(bool force);
 
 static _WORD chng_icon(_WORD object);
 
@@ -303,6 +305,47 @@ static void set_maxicons(void)
 {
 	m_icnx = (xd_desk.g_w - icn_xoff) / iconw - 1;
 	m_icny = (xd_desk.g_h - icn_yoff) / iconh - 1;
+}
+
+
+/*
+ * APJ-OS: after the grid changed while loading (no redraws): every desk's
+ * icon objects to their grid positions at the new cell size
+ */
+
+static void icn_regrid_tree(OBJECT *tree, ICON *icn)
+{
+	_WORD i;
+
+	if (tree == NULL || icn == NULL)
+		return;
+
+	for (i = 0; i < max_icons; i++, icn++)
+	{
+		OBJECT *o = &tree[i + 1];
+
+		if (icn->item_type == ITM_NOTUSED)
+			continue;
+		if (icn->x > m_icnx)
+			icn->x = m_icnx;
+		if (icn->y > m_icny)
+			icn->y = m_icny;
+		o->ob_x = icn->x * iconw + icn_xoff;
+		o->ob_y = icn->y * iconh + icn_yoff;
+		o->ob_width = iconw;
+		o->ob_height = iconh;
+	}
+}
+
+
+static void icn_regrid_all(void)
+{
+	_WORD d;
+
+	icn_regrid_tree(desktop, desk_icons);
+	for (d = 0; d < DSK_NDESKS; d++)
+		if (dsk_ctx[d].tree != desktop)
+			icn_regrid_tree(dsk_ctx[d].tree, dsk_ctx[d].icons);
 }
 
 
@@ -2100,11 +2143,11 @@ void dsk_insticon(WINDOW *w, _WORD n, _WORD *list)
 			{
 				nameonly = fn_get_name(name);
 #if _MINT_
-				cramped_name(nameonly, iconlabel, sizeof(INAME));
+				dir_iconlabel(nameonly, iconlabel, sizeof(INAME));	/* as names are shown */
 #else
 				strcpy(iconlabel, nameonly);	/* shorter, and safe in single-TOS */
+				dir_dispcase(iconlabel);
 #endif
-				dir_dispcase(iconlabel);	/* the default label, as names are shown */
 				icon_no = icnt_geticon(nameonly, itype, ttype);
 				strsncpy(dirname, name, sizeof(VLNAME));
 				button = AFILE;
@@ -2444,11 +2487,11 @@ static bool icn_copy(WINDOW *dw,		/* pointer to destination window */
 			return FALSE;
 		nameonly = fn_get_name(fname);
 #if _MINT_
-		cramped_name(nameonly, tolabel, sizeof(INAME));
+		dir_iconlabel(nameonly, tolabel, sizeof(INAME));	/* as names are shown */
 #else
 		strcpy(tolabel, nameonly);	/* shorter, and safe in single-TOS */
+		dir_dispcase(tolabel);
 #endif
-		dir_dispcase(tolabel);			/* the label, as names are shown */
 		icon = icnt_geticon(nameonly, type, ttype);
 		add_icon(type, ttype, link, icon, tolabel, 0, ix, iy, TRUE, fname);
 		incr_pos(&ix, &iy);
@@ -2858,10 +2901,29 @@ static CfgEntry const DskIcons_table[] = {
 
 void dsk_config(XFILE *file, int lvl, int io, int *error)
 {
+	/* the options group (label width, auto grid) is loaded by now; desk
+	 * icons made below copy the label geometry */
+
+	if (io == CFG_LOAD)
+		icn_labelboxes();
+
 	*error = handle_cfg(file, DskIcons_table, lvl, CFGEMP, io, rem_all_desks, dsk_default);
 
 	if (io == CFG_LOAD && *error >= 0)
 	{
+		/* an automatic grid overrides the saved iconw/iconh - the icons
+		 * were placed with those, so put every desk's icons on the new one */
+
+		if (options.igrid)
+		{
+			_WORD ow = iconw, oh = iconh;
+
+			icn_autogrid(FALSE);
+			set_maxicons();
+			if (iconw != ow || iconh != oh)
+				icn_regrid_all();
+		}
+
 		/* icon routing may have left another desk adopted */
 
 		if (dsk_cur != 0)
@@ -2914,6 +2976,71 @@ static _WORD aes_supports_coloricons(void)
  * Load the icon file. Result: TRUE if no error
  * Use standard functions of the AES
  */
+
+/*
+ * APJ-OS: label boxes for the system font. The icon resource gives every
+ * label a 72x8 box under the image - sized for the 6x6 small font. With
+ * the 1080p system font XaAES draws labels in that font, so an 8px box
+ * put the text over the bottom of the image, the selection pill covered
+ * only a sliver, and names wider than 72px hung off the left of their
+ * cell. Size the box for icn_labelchars() characters at the system font
+ * and centre the image over it. Copies of these blocks (desktop and
+ * window items) inherit the geometry. Classic fonts (16px and under) keep
+ * the resource layout. Re-run after the configuration is loaded ('lchr').
+ */
+
+_WORD icn_labelchars(void)
+{
+	return (options.lchr >= 6 && options.lchr <= 12) ? options.lchr : 10;
+}
+
+
+static void icn_labelboxes(void)
+{
+	_WORD i, lw = icn_labelchars() * xd_fnt_w;
+
+	if (xd_fnt_h <= 16 || icons == NULL)
+		return;
+
+	for (i = 0; i < n_icons; i++)
+	{
+		OBJECT *o = &icons[i];
+		_WORD ty = o->ob_type & 0xFF;
+		ICONBLK *b;
+
+		if (ty != G_ICON && ty != G_CICON)
+			continue;
+
+		b = &o->ob_spec.ciconblk->monoblk;
+
+		b->ib_wtext = (lw > b->ib_wicon) ? lw : b->ib_wicon;
+		b->ib_xtext = 0;
+		b->ib_xicon = (b->ib_wtext - b->ib_wicon) / 2;
+		b->ib_ytext = b->ib_yicon + b->ib_hicon + 2;
+		b->ib_htext = xd_fnt_h;
+
+		o->ob_width = b->ib_wtext;
+		o->ob_height = b->ib_ytext + b->ib_htext;
+	}
+}
+
+
+/*
+ * APJ-OS: the icon cell (desktop and window icon grid) follows the icon
+ * objects - the image, and the label box under it - with a small gap,
+ * unless a grid was set by hand in Window options ('igrd' 0). force: set
+ * it regardless (at icon load, before any configuration).
+ */
+
+static void icn_autogrid(bool force)
+{
+	if ((force || options.igrid) && icons != NULL && icons[0].ob_width > 0 && icons[0].ob_height > 0)
+	{
+		iconw = icons[0].ob_width + 8;
+		iconh = icons[0].ob_height + 6;
+	}
+}
+
 
 bool load_icons(void)
 {
@@ -2971,62 +3098,8 @@ bool load_icons(void)
 			n_icons++;
 		} while ((icons[i++].ob_flags & OF_LASTOB) == 0);
 
-		/*
-		 * APJ-OS: label boxes for the system font. The icon resource
-		 * gives every label a 72x8 box under the image - sized for the
-		 * 6x6 small font. With the 1080p system font (12x24) XaAES draws
-		 * labels in that font, so an 8px box put the text over the
-		 * bottom of the image, the selection pill covered only a sliver,
-		 * and names wider than 72px hung off the left of their cell.
-		 * Size the box for INAME's 12 characters at the system font and
-		 * centre the image over it. Copies of these blocks (desktop and
-		 * window items) inherit the geometry. Classic fonts (16px and
-		 * under) keep the resource layout.
-		 */
-
-		if (xd_fnt_h > 16)
-		{
-			_WORD lw = 12 * xd_fnt_w;
-
-			for (i = 0; i < n_icons; i++)
-			{
-				OBJECT *o = &icons[i];
-				_WORD ty = o->ob_type & 0xFF;
-				ICONBLK *b;
-
-				if (ty != G_ICON && ty != G_CICON)
-					continue;
-
-				b = &o->ob_spec.ciconblk->monoblk;
-
-				if (b->ib_htext >= xd_fnt_h)
-					continue;
-
-				if (b->ib_wtext < lw)
-					b->ib_wtext = lw;
-				if (b->ib_wtext < b->ib_wicon)
-					b->ib_wtext = b->ib_wicon;
-
-				b->ib_xtext = 0;
-				b->ib_xicon = (b->ib_wtext - b->ib_wicon) / 2;
-				b->ib_ytext = b->ib_yicon + b->ib_hicon + 2;
-				b->ib_htext = xd_fnt_h;
-
-				if (o->ob_width < b->ib_wtext)
-					o->ob_width = b->ib_wtext;
-				o->ob_height = b->ib_ytext + b->ib_htext;
-			}
-		}
-
-		/* APJ-OS: the icon cell follows the icon size in the resource
-		 * (72x40 objects -> the classic 80x46 cell; a 48px set is 96x64
-		 * -> 104x70), so larger icon sets lay out without code changes */
-
-		if (icons[0].ob_width > 0 && icons[0].ob_height > 0)
-		{
-			iconw = icons[0].ob_width + 8;
-			iconh = icons[0].ob_height + 6;
-		}
+		icn_labelboxes();
+		icn_autogrid(TRUE);
 	}
 
 	_AESrscfile = svtree;
@@ -3837,6 +3910,24 @@ void dsk_options(void)
 
 					iw = icn_atoi(IXGRID);
 					ih = icn_atoi(IYGRID);
+
+					/* APJ-OS: 0 = automatic (fit the icons and labels);
+					 * any other change = a grid set by hand */
+
+					if (iw == 0 || ih == 0)
+					{
+						options.igrid = 1;
+						iw = iconw;
+						ih = iconh;
+						icn_autogrid(FALSE);
+						if (iw != iconw || ih != iconh)
+						{
+							iw = iconw;
+							ih = iconh;
+							iconw = -1;		/* force the rearrange below */
+						}
+					} else if (iw != iconw || ih != iconh)
+						options.igrid = 0;
 
 					if (iw < ICON_W / 2)
 						iw = ICON_W / 2;
