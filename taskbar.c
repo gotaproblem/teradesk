@@ -854,6 +854,18 @@ static void tb_drawdock(GRECT *clip)
 			r.g_h = tile;
 			tb_appr[i] = r;
 
+			/* Outside the area being repainted (the pills/clock-only
+			 * refresh on nearly every tick): nothing to draw. objc_draw in
+			 * particular hides the mouse pointer for the whole call wherever
+			 * it is - calling it for every tile each tick made the pointer
+			 * flicker all over the screen. */
+			if (r.g_x >= clip->g_x + clip->g_w || r.g_x + r.g_w <= clip->g_x ||
+				r.g_y >= clip->g_y + clip->g_h || r.g_y + r.g_h <= clip->g_y)
+			{
+				x += tile + gap;
+				continue;
+			}
+
 			if (top || tb_hovtgt == TB_HOV_APP + i)
 				tb_rfill(&r, t->dark);
 
