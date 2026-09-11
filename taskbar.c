@@ -182,11 +182,25 @@ static _WORD tb_ch;
 
 typedef struct
 {
-	_WORD id;							/* AES application id */
+	_WORD id;							/* AES application id (owner, for a window) */
+	_WORD win;							/* 0 = application; else a minimised window */
+	_WORD mins;							/* application: its minimised windows */
 	char name[12];						/* AES name, trailing blanks cut */
+	char title[32];						/* tooltip: name, or the window's title */
 	_WORD icon;							/* index in icons[], -1 = none */
 	CICONBLK blk;						/* drawing copy, no label */
 } TB_APP;
+
+/* XaAES appl_control 117 entry (c_window.h struct apj_dockent) */
+
+typedef struct
+{
+	_WORD handle;						/* in: [0].handle = entries the buffer holds */
+	_WORD apid;
+	char title[32];
+} TB_DOCKENT;
+
+static _WORD tb_dockreg = 0;				/* registered as XaAES's dock (116) */
 
 static TB_APP tb_apps[TB_MAXAPPS];
 static _WORD tb_napps = 0;
@@ -463,11 +477,16 @@ static void tb_appicon(TB_APP *a)
 	char fn[16];
 	_WORD ic;
 
-	strcpy(fn, a->name);
-	strcat(fn, ".APP");
-
 	a->icon = -1;
-	ic = icnt_geticon(fn, ITM_PROGRAM, ITM_NOTUSED);
+
+	if (a->win > 0 && a->id == ap_id)
+		ic = icnt_geticon("\\", ITM_FOLDER, ITM_NOTUSED);	/* our own: a folder */
+	else
+	{
+		strcpy(fn, a->win > 0 ? "" : a->name);
+		strcat(fn, ".APP");
+		ic = icnt_geticon(fn, ITM_PROGRAM, ITM_NOTUSED);
+	}
 
 	if (ic >= 0 && icons != NULL)
 	{
@@ -479,13 +498,16 @@ static void tb_appicon(TB_APP *a)
 }
 
 
-/* Refresh the running-application list; TRUE if anything changed */
+/* Refresh the running-application list, then the minimised windows
+ * (an application's own count, or a tile of their own for windows of
+ * TeraDesk and of anything not listed); TRUE if anything changed */
 
 static bool tb_scanapps(void)
 {
 	TB_APP na[TB_MAXAPPS];
+	TB_DOCKENT de[TB_MAXAPPS];
 	char name[16];
-	_WORD type, id, more, guard = 64, n = 0, i, top = -1, th, dummy;
+	_WORD type, id, more, guard = 64, n = 0, i, j, nd, top = -1, th, dummy;
 	bool changed = FALSE;
 
 	if (!mint)
@@ -505,12 +527,38 @@ static bool tb_scanapps(void)
 			if (k > 0)
 			{
 				na[n].id = id;
+				na[n].win = 0;
+				na[n].mins = 0;
 				strsncpy(na[n].name, name, sizeof(na[n].name));
+				strsncpy(na[n].title, name, sizeof(na[n].title));
 				n++;
 			}
 		}
 
 		more = appl_search(1, name, &type, &id);	/* APP_NEXT */
+	}
+
+	de[0].handle = TB_MAXAPPS;
+	nd = tb_dockreg ? appl_control(-1, 117, de) : 0;
+
+	for (j = 0; j < nd && j < TB_MAXAPPS; j++)
+	{
+		for (i = 0; i < n; i++)
+			if (na[i].win == 0 && na[i].id == de[j].apid)
+				break;
+
+		if (i < n)
+			na[i].mins++;
+		else if (n < TB_MAXAPPS)
+		{
+			na[n].id = de[j].apid;
+			na[n].win = de[j].handle;
+			na[n].mins = 0;
+			na[n].name[0] = 0;
+			de[j].title[sizeof(de[j].title) - 1] = 0;
+			strsncpy(na[n].title, de[j].title[0] ? de[j].title : "Window", sizeof(na[n].title));
+			n++;
+		}
 	}
 
 	if (wind_get(0, WF_TOP, &th, &top, &dummy, &dummy) == 0 || th <= 0)
@@ -521,13 +569,19 @@ static bool tb_scanapps(void)
 
 	for (i = 0; i < n; i++)
 	{
-		if (i >= tb_napps || na[i].id != tb_apps[i].id || strcmp(na[i].name, tb_apps[i].name) != 0)
+		if (i >= tb_napps || na[i].id != tb_apps[i].id || na[i].win != tb_apps[i].win ||
+			strcmp(na[i].name, tb_apps[i].name) != 0)
 		{
 			tb_apps[i].id = na[i].id;
+			tb_apps[i].win = na[i].win;
 			strcpy(tb_apps[i].name, na[i].name);
 			tb_appicon(&tb_apps[i]);
 			changed = TRUE;
 		}
+		if (na[i].mins != tb_apps[i].mins)
+			changed = TRUE;
+		tb_apps[i].mins = na[i].mins;
+		strcpy(tb_apps[i].title, na[i].title);
 	}
 
 	tb_napps = n;
@@ -845,7 +899,7 @@ static void tb_drawdock(GRECT *clip)
 
 		for (i = 0; i < shown; i++)
 		{
-			bool top = (tb_apps[i].id == tb_topapp);
+			bool top = (tb_apps[i].win == 0 && tb_apps[i].id == tb_topapp);
 			GRECT bar;
 
 			r.g_x = x;
@@ -1221,7 +1275,12 @@ static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 		{
 			if (tb_inrect(&tb_appr[i], x, y))
 			{
-				appl_control(tb_apps[i].id, 12, NULL);	/* APC_TOP */
+				/* a minimised window: restore it; an application: restore
+				 * its minimised windows, else bring it to the front */
+				if (tb_apps[i].win > 0)
+					appl_control(-1, 118, (void *) (long) tb_apps[i].win);
+				else if (tb_apps[i].mins == 0 || appl_control(-1, 119, (void *) (long) tb_apps[i].id) == 0)
+					appl_control(tb_apps[i].id, 12, NULL);	/* APC_TOP */
 				tb_dirty = TRUE;
 				return;
 			}
@@ -2289,7 +2348,7 @@ void tb_tick(void)
 			{
 				/* dock: the application's name */
 
-				strsncpy(tip_lines[0], tb_apps[tb_hovtgt - TB_HOV_APP].name, TIP_MAXLEN);
+				strsncpy(tip_lines[0], tb_apps[tb_hovtgt - TB_HOV_APP].title, TIP_MAXLEN);
 				tip_nlines = 1;
 				tip_kind = 3;			/* static */
 				tip_minw = 0;
@@ -2336,6 +2395,16 @@ void tb_tick(void)
 		tb_timesync();
 	}
 
+	/* dock: ask XaAES to minimise windows to the bar rather than to icons
+	 * on the desktop while the Fluent dock is showing */
+
+	if (mint && tb_dockreg != (bt_fluent() ? 1 : 0))
+	{
+		tb_dockreg = bt_fluent() ? 1 : 0;
+		appl_control(-1, 116, (void *) (long) tb_dockreg);
+		tb_dirty = TRUE;
+	}
+
 	if (tb_build() || tb_dirty)
 	{
 		/* dock: a pills/clock-only change repaints just that group - the
@@ -2364,6 +2433,12 @@ void tb_close(void)
 	mn_close();							/* the JIT panel, */
 	sm_close();							/* and the system menu too */
 	st_close();							/* and the settings page */
+
+	if (tb_dockreg)						/* minimised windows back to the desktop */
+	{
+		appl_control(-1, 116, (void *) 0L);
+		tb_dockreg = 0;
+	}
 
 	if (tb_window != NULL)
 	{
