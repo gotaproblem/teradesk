@@ -39,6 +39,7 @@
 #include "version.h"
 #include "window.h"
 #include "icon.h"
+#include "icontype.h"					/* icnt_geticon: running-app icons */
 #include "btheme.h"
 #include "stringf.h"
 #include "taskbar.h"
@@ -166,6 +167,32 @@ static GRECT tb_pager[DSK_NDESKS];			/* the desktop pager buttons */
 static bool tb_dirty = FALSE;				/* content changed since drawn */
 static _WORD tb_cw;							/* actual text cell metrics in use */
 static _WORD tb_ch;
+
+/*
+ * APJ-OS dock (Fluent-class themes, phase 4): running GEM applications,
+ * centred, each an icon in a rounded tile with a running indicator.
+ */
+
+#ifndef APP_APPLICATION
+#define APP_APPLICATION 0x02			/* AES 4.0 appl_search type flag */
+#endif
+
+#define TB_MAXAPPS		12
+#define TB_HOV_APP		10				/* hover targets TB_HOV_APP + slot */
+
+typedef struct
+{
+	_WORD id;							/* AES application id */
+	char name[12];						/* AES name, trailing blanks cut */
+	_WORD icon;							/* index in icons[], -1 = none */
+	CICONBLK blk;						/* drawing copy, no label */
+} TB_APP;
+
+static TB_APP tb_apps[TB_MAXAPPS];
+static _WORD tb_napps = 0;
+static _WORD tb_topapp = -1;				/* owner of the top window */
+static GRECT tb_appr[TB_MAXAPPS];			/* screen rects of the app tiles */
+static char tb_noname[1];					/* empty label for the icon copies */
 
 
 /*
@@ -372,6 +399,513 @@ static void tb_drawcell(_WORD *x, char *text, bool raised, bool alert, bool sel)
 }
 
 
+/* ---- APJ-OS dock ------------------------------------------------------ */
+
+/* A fill with the corners softened by 2px (the bar behind shows through) */
+
+static void tb_rfill(GRECT *r, _WORD colour)
+{
+	GRECT a;
+
+	if (r->g_w < 6 || r->g_h < 6)
+	{
+		bt_fill(r, colour);
+		return;
+	}
+
+	a.g_x = r->g_x + 2;
+	a.g_y = r->g_y;
+	a.g_w = r->g_w - 4;
+	a.g_h = r->g_h;
+	bt_fill(&a, colour);
+
+	a.g_x = r->g_x + 1;
+	a.g_y = r->g_y + 1;
+	a.g_w = r->g_w - 2;
+	a.g_h = r->g_h - 2;
+	bt_fill(&a, colour);
+
+	a.g_x = r->g_x;
+	a.g_y = r->g_y + 2;
+	a.g_w = r->g_w;
+	a.g_h = r->g_h - 4;
+	bt_fill(&a, colour);
+}
+
+
+static bool tb_inrect(GRECT *r, _WORD x, _WORD y)
+{
+	return (r->g_w > 0 && x >= r->g_x && x < r->g_x + r->g_w &&
+			y >= r->g_y && y < r->g_y + r->g_h);
+}
+
+
+/* The dock tile under (x, y), or -1 */
+
+static _WORD tb_apphit(_WORD x, _WORD y)
+{
+	_WORD i;
+
+	for (i = 0; i < tb_napps; i++)
+		if (tb_inrect(&tb_appr[i], x, y))
+			return i;
+	return -1;
+}
+
+
+/* The icon for a running application: TeraDesk's program icon for
+ * NAME.APP (its icon assignments apply), label removed */
+
+static void tb_appicon(TB_APP *a)
+{
+	char fn[16];
+	_WORD ic;
+
+	strcpy(fn, a->name);
+	strcat(fn, ".APP");
+
+	a->icon = -1;
+	ic = icnt_geticon(fn, ITM_PROGRAM, ITM_NOTUSED);
+
+	if (ic >= 0 && icons != NULL)
+	{
+		a->icon = ic;
+		a->blk = *icons[ic].ob_spec.ciconblk;
+		a->blk.monoblk.ib_ptext = tb_noname;
+		a->blk.monoblk.ib_char = (_WORD) (a->blk.monoblk.ib_char & 0xFF00);
+	}
+}
+
+
+/* Refresh the running-application list; TRUE if anything changed */
+
+static bool tb_scanapps(void)
+{
+	TB_APP na[TB_MAXAPPS];
+	char name[16];
+	_WORD type, id, more, guard = 64, n = 0, i, top = -1, th, dummy;
+	bool changed = FALSE;
+
+	if (!mint)
+		return FALSE;
+
+	more = appl_search(0, name, &type, &id);	/* APP_FIRST */
+
+	while (more && guard-- > 0)
+	{
+		if ((type & APP_APPLICATION) != 0 && id != ap_id && id > 0 && n < TB_MAXAPPS)
+		{
+			_WORD k = (_WORD) strlen(name);
+
+			while (k > 0 && name[k - 1] == ' ')
+				name[--k] = 0;
+
+			if (k > 0)
+			{
+				na[n].id = id;
+				strsncpy(na[n].name, name, sizeof(na[n].name));
+				n++;
+			}
+		}
+
+		more = appl_search(1, name, &type, &id);	/* APP_NEXT */
+	}
+
+	if (wind_get(0, WF_TOP, &th, &top, &dummy, &dummy) == 0 || th <= 0)
+		top = -1;
+
+	if (n != tb_napps || top != tb_topapp)
+		changed = TRUE;
+
+	for (i = 0; i < n; i++)
+	{
+		if (i >= tb_napps || na[i].id != tb_apps[i].id || strcmp(na[i].name, tb_apps[i].name) != 0)
+		{
+			tb_apps[i].id = na[i].id;
+			strcpy(tb_apps[i].name, na[i].name);
+			tb_appicon(&tb_apps[i]);
+			changed = TRUE;
+		}
+	}
+
+	tb_napps = n;
+	tb_topapp = top;
+
+	return changed;
+}
+
+
+/* One flat text pill at *x (advanced); hovered pills get the hover face */
+
+static void tb_pill(_WORD *x, const char *text, _WORD hov, bool alert, GRECT *rect, bool dot)
+{
+	const BTHEME *t = bt();
+	GRECT r;
+	_WORD dw = dot ? tb_ch / 2 + 6 : 0;
+
+	r.g_w = (_WORD) strlen(text) * tb_cw + 2 * TB_HPAD + 8 + dw;
+	r.g_h = tb_ch + 12;
+	r.g_x = *x;
+	r.g_y = tb_rect.g_y + (tb_rect.g_h - r.g_h) / 2;
+
+	if (alert)
+		tb_rfill(&r, t->alert_bg);
+	else if (hov)
+		tb_rfill(&r, t->dark);
+
+	if (dot)
+	{
+		GRECT d;
+
+		d.g_w = d.g_h = tb_ch / 2 - 2;
+		d.g_x = r.g_x + TB_HPAD + 4;
+		d.g_y = r.g_y + (r.g_h - d.g_h) / 2;
+		tb_rfill(&d, t->accent);
+	}
+
+	vst_color(vdi_handle, alert ? t->alert_fg : t->text);
+	{
+		char buf[TB_CTEXT + 8];
+
+		strsncpy(buf, text, sizeof(buf));
+		w_transptext(r.g_x + TB_HPAD + 4 + dw, r.g_y + (r.g_h - tb_ch) / 2, buf);
+	}
+	vst_color(vdi_handle, t->text);
+
+	if (rect)
+		*rect = r;
+	*x += r.g_w + 2;
+}
+
+
+/* Draw an application icon centred in a tile, through the AES */
+
+static void tb_drawicon(TB_APP *a, GRECT *tile, GRECT *clip)
+{
+	OBJECT tree[2];
+	ICONBLK *b = &a->blk.monoblk;
+
+	if (a->icon < 0)
+		return;
+
+	memclr(tree, sizeof(tree));
+
+	tree[0].ob_next = -1;
+	tree[0].ob_head = 1;
+	tree[0].ob_tail = 1;
+	tree[0].ob_type = G_IBOX;
+	tree[0].ob_x = 0;
+	tree[0].ob_y = 0;
+	tree[0].ob_width = xd_screen.g_w;
+	tree[0].ob_height = xd_screen.g_h;
+
+	tree[1] = icons[a->icon];
+	tree[1].ob_next = 0;
+	tree[1].ob_head = -1;
+	tree[1].ob_tail = -1;
+	tree[1].ob_flags = OF_LASTOB;
+	tree[1].ob_state = OS_NORMAL;
+	tree[1].ob_spec.ciconblk = &a->blk;
+	tree[1].ob_x = tile->g_x + (tile->g_w - b->ib_wicon) / 2 - b->ib_xicon;
+	tree[1].ob_y = tile->g_y + (tile->g_h - b->ib_hicon) / 2 - b->ib_yicon - 2;
+
+	objc_draw_grect(tree, 0, 1, clip);
+}
+
+
+static void tb_drawdock(GRECT *clip)
+{
+	const BTHEME *t = bt();
+	_WORD i, x, tile = tb_rect.g_h - 12, cy = tb_rect.g_y + tb_rect.g_h / 2;
+	_WORD rightx = tb_rect.g_x + tb_rect.g_w;	/* left edge of the right-hand group */
+	GRECT r;
+
+	if (tile < tb_ch + 8)
+		tile = tb_ch + 8;
+
+	/* flat panel, 1px border along the top */
+
+	bt_fill(&tb_rect, t->panel);
+	tb_line(tb_rect.g_x, tb_rect.g_y, tb_rect.g_x + tb_rect.g_w - 1, tb_rect.g_y, t->border);
+
+	/* left: the PiSTorm "start" button - four accent squares */
+
+	tb_badge.g_x = tb_rect.g_x + 12;
+	tb_badge.g_y = cy - tile / 2;
+	tb_badge.g_w = tile;
+	tb_badge.g_h = tile;
+
+	if (tb_hovtgt == TB_HOV_BADGE)
+		tb_rfill(&tb_badge, t->dark);
+
+	{
+		_WORD g = tile * 24 / 44, q = (g - g / 6) / 2, gap = g - 2 * q;
+		GRECT sq;
+
+		sq.g_w = sq.g_h = q;
+		for (i = 0; i < 4; i++)
+		{
+			sq.g_x = tb_badge.g_x + (tile - g) / 2 + (i & 1) * (q + gap);
+			sq.g_y = tb_badge.g_y + (tile - g) / 2 + (i >> 1) * (q + gap);
+			tb_rfill(&sq, t->accent);
+		}
+	}
+
+	/* right, from the edge inwards: two-line clock, pager, pills */
+
+	x = tb_rect.g_x + tb_rect.g_w - 12;
+	tb_clockr.g_w = 0;
+	tb_apjr.g_w = 0;
+	tb_tempr.g_w = 0;
+	tb_jitr.g_w = 0;
+
+	if (tb_clock[0] != 0)
+	{
+		char date[24], *sp;
+		char *tm;
+		_WORD w, lw;
+
+		strcpy(date, tb_clock);
+		sp = strrchr(date, ' ');
+
+		if (sp != NULL)
+		{
+			*sp = 0;
+			tm = sp + 1;
+		} else
+		{
+			tm = tb_clock;
+			date[0] = 0;
+		}
+
+		lw = (_WORD) strlen(tm);
+		if ((_WORD) strlen(date) > lw)
+			lw = (_WORD) strlen(date);
+		w = lw * tb_cw + 2 * TB_HPAD;
+
+		r.g_x = x - w;
+		r.g_w = w;
+		r.g_h = date[0] ? 2 * tb_ch + 4 : tb_ch + 12;
+		r.g_y = cy - r.g_h / 2;
+		tb_clockr = r;
+
+		if (tb_hovtgt == TB_HOV_CLOCK)
+			tb_rfill(&r, t->dark);
+
+		vst_color(vdi_handle, t->text);
+		w_transptext(r.g_x + r.g_w - TB_HPAD - (_WORD) strlen(tm) * tb_cw,
+					 date[0] ? r.g_y + 2 : r.g_y + 6, tm);
+
+		if (date[0])
+		{
+			vst_color(vdi_handle, t->disabled);
+			w_transptext(r.g_x + r.g_w - TB_HPAD - (_WORD) strlen(date) * tb_cw,
+						 r.g_y + 2 + tb_ch, date);
+			vst_color(vdi_handle, t->text);
+		}
+
+		x = r.g_x - 12;
+	}
+
+	/* the pager: one small square per desk, the current one filled */
+
+	{
+		_WORD d, cur = dsk_current(), sq = tb_ch * 14 / 20, gap = 4;
+
+		if (sq < 8)
+			sq = 8;
+
+		x -= DSK_NDESKS * sq + (DSK_NDESKS - 1) * gap;
+
+		for (d = 0; d < DSK_NDESKS; d++)
+		{
+			GRECT b;
+
+			b.g_x = x + d * (sq + gap);
+			b.g_y = cy - sq / 2;
+			b.g_w = sq;
+			b.g_h = sq;
+
+			if (d == cur)
+				tb_rfill(&b, t->accent);
+			else
+			{
+				GRECT in = b;
+
+				tb_rfill(&b, t->disabled);
+				in.g_x++;
+				in.g_y++;
+				in.g_w -= 2;
+				in.g_h -= 2;
+				tb_rfill(&in, t->panel);
+			}
+
+			/* a generous hit area: the square plus its gap */
+
+			tb_pager[d].g_x = b.g_x - gap / 2;
+			tb_pager[d].g_y = tb_rect.g_y + 4;
+			tb_pager[d].g_w = sq + gap;
+			tb_pager[d].g_h = tb_rect.g_h - 8;
+		}
+
+		x -= 12;
+	}
+
+	/* pills, laid out right to left so the group hugs the pager:
+	 * JIT (with a status dot), Temp, CPU/FPU, Pi model, APJ-OS version */
+
+	{
+		const char *txt[5];
+		_WORD k, nk = 0, w, xx;
+		static const _WORD role[5] = { 4, 2, 3, 1, 5 };
+
+		for (k = 0; k < 5; k++)
+		{
+			_WORD c = role[k];
+
+			if (c == 5)
+				txt[k] = tb_apjcell;
+			else if (c == 2 && strncmp(tb_cell[2], "Temp ", 5) == 0)
+				txt[k] = tb_cell[2] + 5;
+			else
+				txt[k] = tb_cell[c];
+		}
+
+		/* total width first, so the row can be placed left of x */
+
+		w = 0;
+		for (k = 0; k < 5; k++)
+		{
+			if (txt[k][0] != 0)
+			{
+				w += (_WORD) strlen(txt[k]) * tb_cw + 2 * TB_HPAD + 8 + 2 +
+					((role[k] == 4) ? tb_ch / 2 + 6 : 0);
+				nk++;
+			}
+		}
+
+		xx = x - w;
+		rightx = xx;
+
+		for (k = 0; k < 5; k++)
+		{
+			_WORD c = role[k];
+			GRECT *hit = NULL;
+			_WORD hov = 0;
+
+			if (txt[k][0] == 0)
+				continue;
+
+			if (c == 4)
+			{
+				hit = &tb_jitr;
+				hov = (tb_hovtgt == TB_HOV_JIT);
+			} else if (c == 2)
+			{
+				hit = &tb_tempr;
+				hov = (tb_hovtgt == TB_HOV_TEMP);
+			} else if (c == 5)
+			{
+				hit = &tb_apjr;
+				hov = (tb_hovtgt == TB_HOV_APJ);
+			}
+
+			tb_pill(&xx, txt[k], hov, (c == 2 && tb_throttled != 0 && tb_flash != 0), hit, (c == 4));
+		}
+		(void) nk;
+	}
+
+	/* centre: running applications */
+
+	{
+		_WORD gap = 6, total, shown = tb_napps, mid = tb_rect.g_x + tb_rect.g_w / 2;
+		_WORD room = mid - (tb_badge.g_x + tb_badge.g_w + 12);
+
+		/* centred on the bar, never into the start button or the pills */
+
+		if (rightx - 12 - mid < room)
+			room = rightx - 12 - mid;
+		while (shown > 0 && (shown * tile + (shown - 1) * gap) / 2 > room)
+			shown--;
+
+		total = shown * tile + (shown - 1) * gap;
+		x = mid - total / 2;
+
+		for (i = 0; i < TB_MAXAPPS; i++)
+			tb_appr[i].g_w = 0;
+
+		for (i = 0; i < shown; i++)
+		{
+			bool top = (tb_apps[i].id == tb_topapp);
+			GRECT bar;
+
+			r.g_x = x;
+			r.g_y = cy - tile / 2;
+			r.g_w = tile;
+			r.g_h = tile;
+			tb_appr[i] = r;
+
+			if (top || tb_hovtgt == TB_HOV_APP + i)
+				tb_rfill(&r, t->dark);
+
+			tb_drawicon(&tb_apps[i], &r, clip);
+			xd_clip_on(clip);		/* objc_draw left the AES clip; ours again */
+
+			/* running indicator: grey, the top application's wider in accent */
+
+			bar.g_w = top ? tile * 18 / 44 : tile * 10 / 44;
+			bar.g_h = 3;
+			bar.g_x = r.g_x + (tile - bar.g_w) / 2;
+			bar.g_y = r.g_y + tile - 5;
+			bt_fill(&bar, top ? t->accent : t->disabled);
+
+			x += tile + gap;
+		}
+	}
+}
+
+
+/* The bar height the current settings want */
+
+static _WORD tb_wantheight(void)
+{
+	if (options.tbarh != 0)
+		return options.tbarh;
+	if (bt_fluent())
+		return (_WORD) (2 * def_font.ch + 16);	/* 56 at the 12pt (10x20) cell */
+	return (_WORD) (xd_fnt_h + 2 + 2 * TB_VPAD + 6);
+}
+
+
+/*
+ * Fit the reserved strip to tb_wantheight(): the desktop area and its
+ * trees follow, and the bar window is moved. Called after the theme is
+ * chosen (at start, and when the settings page cycles it).
+ */
+
+void tb_refit(void)
+{
+	_WORD want = tb_wantheight(), d;
+
+	if (options.tbar == 0 || tb_height == 0 || want == tb_height)
+		return;
+
+	d = want - tb_height;
+	xd_desk.g_h -= d;
+	tb_height = want;
+	tb_rect.g_y -= d;
+	tb_rect.g_h = want;
+
+	dsk_areachanged();
+
+	if (tb_window != NULL)
+	{
+		xw_setsize(tb_window, &tb_rect);
+		tb_dirty = TRUE;
+	}
+}
+
+
 /*
  * Select the bar text font: the system font at the AES's size (xaaes.cnf
  * STANDARD_POINT - def_font starts from it, see fnt_syspoints()). It used
@@ -429,6 +963,13 @@ static void tb_drawpart(GRECT *clip)
 
 	xd_clip_on(clip);
 	tb_setfont();
+
+	if (bt_fluent())
+	{
+		tb_drawdock(clip);
+		xd_clip_off();
+		return;
+	}
 
 	/* bar background with a raised top edge and a dark bottom edge */
 
@@ -618,6 +1159,22 @@ static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 	{
 		mn_toggle();
 		return;
+	}
+
+	/* dock: a running application - bring it to the front */
+
+	{
+		_WORD i;
+
+		for (i = 0; i < tb_napps; i++)
+		{
+			if (tb_inrect(&tb_appr[i], x, y))
+			{
+				appl_control(tb_apps[i].id, 12, NULL);	/* APC_TOP */
+				tb_dirty = TRUE;
+				return;
+			}
+		}
 	}
 
 	/* the desktop pager */
@@ -1252,6 +1809,11 @@ static bool tb_build(void)
 		changed = TRUE;
 	}
 
+	/* dock: running applications */
+
+	if (bt_fluent() && tb_scanapps())
+		changed = TRUE;
+
 	/* keyboard desk switches repaint the pager on the next tick */
 
 	{
@@ -1326,6 +1888,7 @@ static void tb_open(void)
 	tb_timesync();						/* set the system clock from the Pi */
 
 	bt_use(options.thm);				/* Bespoke UI theme (0 = GEM Grey) */
+	tb_refit();							/* APJ-OS: dock height under Fluent */
 
 	tb_read_apjver();					/* APJ-OS version cell (S:\APJOS.VER) */
 
@@ -1566,6 +2129,14 @@ void tb_hover(_WORD x, _WORD y)
 		{
 			tgt = TB_HOV_APJ;
 			tb_hovrect = tb_apjr;
+		} else if (bt_fluent() && tb_inrect(&tb_jitr, x, y))
+		{
+			tgt = TB_HOV_JIT;
+			tb_hovrect = tb_jitr;
+		} else if (bt_fluent() && tb_apphit(x, y) >= 0)
+		{
+			tgt = TB_HOV_APP + tb_apphit(x, y);
+			tb_hovrect = tb_appr[tgt - TB_HOV_APP];
 		} else
 		{
 			/* dead space: watch a small box around the pointer */
@@ -1597,6 +2168,10 @@ void tb_hover(_WORD x, _WORD y)
 		tb_hovtgt = tgt;
 		tb_dwell = 0;
 		tip_close();					/* tooltip belongs to the old target */
+
+		if (bt_fluent())
+			tb_update(NULL);			/* the dock shows hover faces - at once,
+										 * not on the next 500 ms tick */
 	}
 }
 
@@ -1653,6 +2228,16 @@ void tb_tick(void)
 				tip_throttle();
 			else if (tb_hovtgt == TB_HOV_APJ)
 				tip_versions();
+			else if (tb_hovtgt >= TB_HOV_APP && tb_hovtgt < TB_HOV_APP + tb_napps && tip_win == NULL)
+			{
+				/* dock: the application's name */
+
+				strsncpy(tip_lines[0], tb_apps[tb_hovtgt - TB_HOV_APP].name, TIP_MAXLEN);
+				tip_nlines = 1;
+				tip_kind = 3;			/* static */
+				tip_minw = 0;
+				tip_show(&tb_appr[tb_hovtgt - TB_HOV_APP]);
+			}
 		}
 	}
 

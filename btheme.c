@@ -423,6 +423,13 @@ typedef struct
 	const char *s;
 } APJ_TEXTREQ;
 
+/* APJ-OS: 1 while XaAES draws us and the active preset is Fluent-class */
+_WORD bt_fluent(void)
+{
+	return (apj_render && presets[cur].has_ext && xd_ncolours >= 16) ? 1 : 0;
+}
+
+
 _WORD bt_text(_WORD x, _WORD y, const char *s)
 {
 	APJ_TEXTREQ rq;

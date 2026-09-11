@@ -122,6 +122,7 @@ _WORD bt_apj_render(void);
  * Returns 0 if the caller must draw it with v_gtext instead. */
 
 _WORD bt_text(_WORD x, _WORD y, const char *s);
+_WORD bt_fluent(void);				/* APJ-OS: Fluent-class preset under render_apj */
 
 enum
 {

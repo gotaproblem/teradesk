@@ -2587,7 +2587,7 @@ void icn_theme_labels(void)
 void dsk_workarea(void)
 {
 	GRECT w;
-	_WORD dy, d;
+	_WORD dy;
 
 	xw_getwork(NULL, &w);
 
@@ -2598,6 +2598,19 @@ void dsk_workarea(void)
 
 	xd_desk.g_y += dy;
 	xd_desk.g_h -= dy;
+
+	dsk_areachanged();
+}
+
+
+/*
+ * APJ-OS: xd_desk changed (menu bar or taskbar height): every desktop
+ * context's background tree follows it, then the desktop is regenerated.
+ */
+
+void dsk_areachanged(void)
+{
+	_WORD d;
 
 	for (d = 0; d < DSK_NDESKS; d++)
 	{

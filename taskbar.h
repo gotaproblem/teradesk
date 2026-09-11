@@ -36,6 +36,7 @@ extern _WORD tb_height;					/* reserved strip height; 0 = no bar */
 void tb_dbg(const char *s);					/* TIP_DEBUG builds only */
 void tb_reserve(void);					/* shrink xd_desk before dsk_init() */
 void tb_apply(void);					/* open bar / return space, per options.tbar */
+void tb_refit(void);						/* APJ-OS: bar height follows the theme (dock) */
 void tb_tick(void);						/* 500 ms timer callback from evntloop() */
 void tb_close(void);					/* close the bar window at shutdown */
 long tb_psget(long index);				/* PSCTRL PS_GETINT; -1 if absent */
