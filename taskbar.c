@@ -681,9 +681,10 @@ void tb_launched(const char *fname)
 	else if (i == tb_nlaunch)
 		i = 0;						/* full: drop the oldest */
 
-	for (; i < tb_nlaunch - 1; i++)
-		strcpy(tb_launch[i], tb_launch[i + 1]);
-	strcpy(tb_launch[tb_nlaunch - 1], fname);
+	/* shift the newer entries down one; then this one goes last */
+	if (i < tb_nlaunch - 1)
+		memmove(tb_launch[i], tb_launch[i + 1], (size_t) (tb_nlaunch - 1 - i) * sizeof(tb_launch[0]));
+	strsncpy(tb_launch[tb_nlaunch - 1], fname, sizeof(tb_launch[0]));
 }
 
 
