@@ -373,30 +373,23 @@ static void tb_drawcell(_WORD *x, char *text, bool raised, bool alert, bool sel)
 
 
 /*
- * Select the bar text font: the default (system) font scaled up so the
- * character cell fills the bar interior. vst_height() returns the
- * metrics actually granted, which the layout then uses - so a VDI
- * without a suitably large font stays consistent, just smaller.
+ * Select the bar text font: the system font at the AES's size (xaaes.cnf
+ * STANDARD_POINT - def_font starts from it, see fnt_syspoints()). It used
+ * to be scaled with vst_height() to fill the bar, which picked the next
+ * bitmap up (15pt in a 12pt system) and followed a saved bar height
+ * instead of the font setting. The popups and tooltips use these metrics.
  */
 
 static void tb_setfont(void)
 {
-	_WORD chw, chh, celw, celh;
-	_WORD want = tb_rect.g_h - 2 * TB_VPAD - 8;
-
 	set_txt_default(&def_font);
-
-	if (want < def_font.ch)
-		want = def_font.ch;
-
-	vst_height(vdi_handle, want, &chw, &chh, &celw, &celh);
 
 	/* themed default text colour - the bar cells set their own per
 	 * cell, the popups/panels draw straight after this call */
 	vst_color(vdi_handle, bt()->text);
 
-	tb_cw = celw;
-	tb_ch = celh;
+	tb_cw = def_font.cw;
+	tb_ch = def_font.ch;
 }
 
 
@@ -1292,10 +1285,14 @@ void tb_reserve(void)
 	 * text), plus the sunken bevels and padding around the cells.
 	 */
 
-	_WORD mbar = xd_desk.g_y - xd_screen.g_y;
+	/* APJ-OS: from the system font cell, not the menu bar gap - the
+	 * Fluent theme changes the bar height after this runs. cell + 2 is
+	 * the stock menu bar, so the classic look is unchanged. */
 
-	if (mbar < def_font.ch)				/* implausible: fall back */
-		mbar = 2 * def_font.ch;
+	_WORD mbar = xd_fnt_h + 2;
+
+	if (mbar < 10)						/* implausible: fall back */
+		mbar = xd_desk.g_y - xd_screen.g_y;
 
 	tb_height = mbar + 2 * TB_VPAD + 6;
 
