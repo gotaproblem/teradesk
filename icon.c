@@ -2750,6 +2750,17 @@ void dsk_areachanged(void)
 		desktop[0].ob_y = xd_desk.g_y;
 		desktop[0].ob_height = xd_desk.g_h;
 		set_maxicons();
+
+		/* the wallpaper was scaled to the old desktop height; left as it
+		 * is, the strip a shorter taskbar gives back shows whatever the
+		 * buffer holds past its end */
+
+		if (options.wallp[0] != 0)
+		{
+			bk_drop();
+			bk_init();					/* regenerates the desktop itself */
+		}
+
 		regen_desktop(desktop);
 	}
 }
@@ -3158,10 +3169,26 @@ void dsk_themechanged(void)
 
 static void icn_autogrid(bool force)
 {
-	if ((force || options.igrid) && icons != NULL && icons[0].ob_width > 0 && icons[0].ob_height > 0)
+	_WORD i, w = 0, h = 0;
+
+	if (!(force || options.igrid) || icons == NULL)
+		return;
+
+	/* the largest icon object, not the first: a classic resource mixes
+	 * sizes, and a cell shorter than an icon clips its label */
+
+	for (i = 0; i < n_icons; i++)
 	{
-		iconw = icons[0].ob_width + 8;
-		iconh = icons[0].ob_height + 6;
+		if (icons[i].ob_width > w)
+			w = icons[i].ob_width;
+		if (icons[i].ob_height > h)
+			h = icons[i].ob_height;
+	}
+
+	if (w > 0 && h > 0)
+	{
+		iconw = w + 8;
+		iconh = h + 6;
 	}
 }
 
