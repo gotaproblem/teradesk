@@ -2677,25 +2677,42 @@ static _WORD dsk_hndlkey(WINDOW *w, _WORD dummy_scancode, _WORD dummy_keystate)
  * to GEM Grey restores the classic look exactly.
  */
 
-void icn_theme_labels(void)
+static void icn_theme_labels_tree(OBJECT *tree, ICON *icn)
 {
-	ICON *icn = desk_icons;
 	_WORD i;
 
-	if (icn == NULL)
+	if (tree == NULL || icn == NULL)
 		return;
 
 	for (i = 0; i < max_icons; i++, icn++)
 	{
-		if (icn->item_type != ITM_NOTUSED)
+		if (icn->item_type != ITM_NOTUSED &&
+			icn->icon_index >= 0 && icn->icon_index < n_icons)
 		{
-			CICONBLK *h = desktop[i + 1].ob_spec.ciconblk;
+			CICONBLK *h = tree[i + 1].ob_spec.ciconblk;
 
 			h->monoblk.ib_char = bt_labelchar(
 				(_WORD) ((icons[icn->icon_index].ob_spec.ciconblk->monoblk.ib_char & 0xFF00) |
 						 (h->monoblk.ib_char & 0x00FF)));
 		}
 	}
+}
+
+
+void icn_theme_labels(void)
+{
+	_WORD d;
+
+	/* every desk, not just the one on screen: a desk created under a
+	 * palette theme kept that theme's label pen, and on a classic desk
+	 * that pen is as pale as the white box behind it - the labels were
+	 * there but invisible */
+
+	icn_theme_labels_tree(desktop, desk_icons);
+
+	for (d = 0; d < DSK_NDESKS; d++)
+		if (dsk_ctx[d].tree != desktop)
+			icn_theme_labels_tree(dsk_ctx[d].tree, dsk_ctx[d].icons);
 }
 
 
@@ -3115,6 +3132,8 @@ static void icn_smallcell(_WORD *cw, _WORD *ch)
 
 		if (appl_getinfo(1, &pts, &id, &mono, &dummy) != 0 && pts > 0)
 		{
+			_WORD ext[8];
+
 			vst_font(vdi_handle, id);
 			vst_point(vdi_handle, pts, &dummy, &dummy, &bw, &bh);
 
@@ -3123,6 +3142,18 @@ static void icn_smallcell(_WORD *cw, _WORD *ch)
 				sw = bw;
 				sh = bh;
 			}
+
+			/* vst_point reports the font's character CELL; what the AES
+			 * actually advances per character can be smaller, and a box
+			 * built from the cell is then visibly fatter than its text.
+			 * Measure ten characters instead. */
+
+			vqt_extent(vdi_handle, "0123456789", ext);
+
+			if (ext[2] - ext[0] > 0)
+				sw = (_WORD) ((ext[2] - ext[0] + 9) / 10);
+			if (ext[7] - ext[1] > 0)
+				sh = (_WORD) (ext[7] - ext[1]);
 
 			/* back to the system font the rest of the desktop draws in */
 			if (appl_getinfo(0, &pts, &id, &mono, &dummy) != 0 && pts > 0)
