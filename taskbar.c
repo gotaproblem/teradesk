@@ -87,8 +87,9 @@ void tb_dbg(const char *s) { tipdbg(s); }
  * Contents, refreshed on the 500 ms MU_TIMER tick from evntloop():
  * a clock (always), and - when the PSCTRL NatFeat answers the probe,
  * i.e. when running on PiSTorm-Atari-JIT - CPU temperature of the Pi,
- * JIT translation-cache use, and the Pi load average. On any other
- * machine (real ST, ARAnyM...) only the clock appears.
+ * the 68k's CPU use (100% less the time it spends in STOP), and the
+ * Pi model. On any other machine (real ST, ARAnyM...) only the clock
+ * appears.
  *
  * Updates stall while a modal dialog is open or during long file
  * operations (cooperative GEM); the first tick afterwards shows current
@@ -104,6 +105,7 @@ void tb_dbg(const char *s) { tipdbg(s); }
 #define PS_STAT_CACHE_USED	39L
 #define PS_STAT_CACHE_TOTAL	40L
 #define PS_HOST_SOC_TEMP_MC	64L
+#define PS_JIT_IDLE_X10		73L		/* STOP share of the clock, tenths of a % */
 #define PS_HOST_TIME_DOS	68L
 #define PS_HOST_DATE_DOS	69L
 #define PS_HOST_THROTTLED	70L
@@ -2268,8 +2270,7 @@ static bool tb_build(void)
 	{
 		static _WORD tslow = 0;			/* temperature refresh divider */
 		long temp;
-		long used = tb_ps(PS_STAT_CACHE_USED);
-		long total = tb_ps(PS_STAT_CACHE_TOTAL);
+		long idle = tb_ps(PS_JIT_IDLE_X10);
 		long thr = tb_ps(PS_HOST_THROTTLED);
 
 		/* The temperature is displayed at a gentler cadence - every
@@ -2301,11 +2302,32 @@ static bool tb_build(void)
 		if (tb_cpustr[0] != 0)
 			strcpy(new_cell[3], tb_cpustr);
 
-		if (total > 0)
+		/* CPU use: 100% less the share of the clock the 68k spent in
+		 * STOP (PS_JIT_IDLE_X10, tenths of a percent). An emulator
+		 * without it answers < 0: fall back to the cache-use figure. */
+
+		if (idle >= 0)
 		{
-			strcpy(new_cell[4], "JIT ");
-			ltoa((used * 100L) / total, &new_cell[4][4], 10);
+			long busy = (1000L - idle + 5L) / 10L;
+
+			if (busy < 0)
+				busy = 0;
+			if (busy > 100)
+				busy = 100;
+			strcpy(new_cell[4], "CPU ");
+			ltoa(busy, &new_cell[4][4], 10);
 			strcat(new_cell[4], "%");
+		} else
+		{
+			long used = tb_ps(PS_STAT_CACHE_USED);
+			long total = tb_ps(PS_STAT_CACHE_TOTAL);
+
+			if (total > 0)
+			{
+				strcpy(new_cell[4], "JIT ");
+				ltoa((used * 100L) / total, &new_cell[4][4], 10);
+				strcat(new_cell[4], "%");
+			}
 		}
 
 		if (temp > 0)
