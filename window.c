@@ -1950,12 +1950,20 @@ static _WORD wd_round(_WORD x, _WORD m)
  * In earlier versions of the code, screen_info.fntw and .fnt_h were used
  * instead of fixed modulus of 8 pixels, but this caused very jumpy
  * real-time movement of windows in Magic and XaAES.
+ *
+ * APJ-OS: no position rounding at all. The 8-pixel grid dates from planar
+ * screens, where a window edge off the word boundary made the blitter and
+ * the fill patterns work harder. On a chunky fVDI screen it buys nothing
+ * and it is exactly what makes a live drag step: XaAES hands this window
+ * a new position for every mouse packet, 1-2 pixels apart, and the
+ * rounding turns those into 8-pixel jumps, x and y on different packets,
+ * so a diagonal drag walks a staircase while the pointer glides. The
+ * SIZE is still rounded to the cell (below) - the text grid needs that.
  */
 
 static void wd_xyround(GRECT *r)
 {
-	r->g_x = wd_round(r->g_x, 8);
-	r->g_y = wd_round(r->g_y, (r->g_y > 4 * xd_fnt_h) ? 8 : 2);
+	(void) r;
 }
 
 
