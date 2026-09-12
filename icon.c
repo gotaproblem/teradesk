@@ -3095,10 +3095,56 @@ _WORD icn_labelchars(void)
 }
 
 
+/*
+ * APJ-OS: the cell of the AES's SMALL font - what it draws icon labels in
+ * when the APJ renderer is off. On a 1080p system with the APJ fonts
+ * installed this is nowhere near the 6x6 the icon resource was drawn for,
+ * so the classic 8px label box cut the text in half.
+ */
+
+static void icn_smallcell(_WORD *cw, _WORD *ch)
+{
+	static _WORD sw = 0, sh = 0;
+
+	if (!sw)
+	{
+		_WORD pts = 0, id = 1, mono = 0, dummy, bw = 0, bh = 0;
+
+		sw = 6;
+		sh = 6;
+
+		if (appl_getinfo(1, &pts, &id, &mono, &dummy) != 0 && pts > 0)
+		{
+			vst_font(vdi_handle, id);
+			vst_point(vdi_handle, pts, &dummy, &dummy, &bw, &bh);
+
+			if (bw > 0 && bh > 0)
+			{
+				sw = bw;
+				sh = bh;
+			}
+
+			/* back to the system font the rest of the desktop draws in */
+			if (appl_getinfo(0, &pts, &id, &mono, &dummy) != 0 && pts > 0)
+			{
+				vst_font(vdi_handle, id);
+				vst_point(vdi_handle, pts, &dummy, &dummy, &bw, &bh);
+			}
+		}
+	}
+
+	*cw = sw;
+	*ch = sh;
+}
+
+
 static void icn_labelboxes(void)
 {
 	_WORD i, lw = icn_labelchars() * xd_fnt_w;
+	_WORD scw, sch;
 	bool wide = (bt_fluent() != 0) && xd_fnt_h > 16;
+
+	icn_smallcell(&scw, &sch);
 
 	if (icons == NULL || icn_box0 == NULL)
 		return;
@@ -3122,10 +3168,13 @@ static void icn_labelboxes(void)
 			b->ib_wtext = icn_box0[i].wt;
 			b->ib_xtext = icn_box0[i].xt;
 			b->ib_ytext = icn_box0[i].yt;
-			b->ib_htext = icn_box0[i].ht;
+			b->ib_htext = (sch > icn_box0[i].ht) ? sch : icn_box0[i].ht;
 			b->ib_xicon = (icn_box0[i].ow - b->ib_wicon) / 2;
 			o->ob_width = icn_box0[i].ow;
-			o->ob_height = icn_box0[i].oh;
+			o->ob_height = b->ib_ytext + b->ib_htext;
+
+			if (o->ob_height < icn_box0[i].oh)
+				o->ob_height = icn_box0[i].oh;
 			continue;
 		}
 
