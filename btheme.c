@@ -326,15 +326,15 @@ static void bt_wall(const PRESET *p)
 	char path[sizeof(BT_WALL_DIR) + 12];
 	_WORD n = (_WORD) (sizeof(BT_WALL_DIR) - 1);
 
-	const char *cur = dsk_wall_main();
+	const char *have = dsk_wall_main();		/* the main desk's wallpaper now */
 
 	if (!p->wall[0])
 		return;
-	if (cur[0] && strnicmp(cur, BT_WALL_DIR, n) != 0)
+	if (have[0] && strnicmp(have, BT_WALL_DIR, n) != 0)
 		return;
 
 	sprintf(path, "%s%s.PNG", BT_WALL_DIR, p->wall);
-	if (stricmp(path, cur) == 0)
+	if (stricmp(path, have) == 0)
 		return;
 	if (!x_exist(path, BT_EX_FILE))
 		return;
