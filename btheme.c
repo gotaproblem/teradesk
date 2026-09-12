@@ -309,7 +309,8 @@ static const _WORD gempen[4] = { G_WHITE, G_BLACK, G_LWHITE, G_LBLACK };
 
 void dsk_workarea(void);				/* icon.c (icon.h needs half the desktop's headers) */
 void dsk_themechanged(void);			/* icon.c: label boxes and icon grid follow the theme */
-void dsk_wall_bind(const char *path, _WORD mode);	/* icon.c: current desk's wallpaper, no redraw */
+void dsk_wall_bind_main(const char *path, _WORD mode);	/* icon.c: the main desk's wallpaper, no redraw */
+const char *dsk_wall_main(void);					/* icon.c: its path, "" = none */
 bool x_exist(const char *file, _WORD flags);		/* xfilesys.h, whose presets[] clashes with ours */
 #define BT_EX_FILE	1						/* = EX_FILE */
 
@@ -325,13 +326,15 @@ static void bt_wall(const PRESET *p)
 	char path[sizeof(BT_WALL_DIR) + 12];
 	_WORD n = (_WORD) (sizeof(BT_WALL_DIR) - 1);
 
+	const char *cur = dsk_wall_main();
+
 	if (!p->wall[0])
 		return;
-	if (options.wallp[0] && strnicmp(options.wallp, BT_WALL_DIR, n) != 0)
+	if (cur[0] && strnicmp(cur, BT_WALL_DIR, n) != 0)
 		return;
 
 	sprintf(path, "%s%s.PNG", BT_WALL_DIR, p->wall);
-	if (stricmp(path, options.wallp) == 0)
+	if (stricmp(path, cur) == 0)
 		return;
 	if (!x_exist(path, BT_EX_FILE))
 		return;
@@ -340,7 +343,7 @@ static void bt_wall(const PRESET *p)
 	 * taskbar, so it is not 16:9; "fit" keeps the picture's ratio and
 	 * letterboxes it with black bars down both sides. A gradient has no
 	 * ratio to keep - stretch it over the whole area. */
-	dsk_wall_bind(path, 0);
+	dsk_wall_bind_main(path, 0);		/* the main desk's; the others follow it */
 }
 
 static void bt_apjpush(const PRESET *p)

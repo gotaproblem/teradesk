@@ -3544,6 +3544,12 @@ static bool dsk_ctx_alloc(_WORD k)
  * after this it transparently works on desk k.
  */
 
+/* APJ-OS: a desk with no wallpaper of its own shows the main desk's
+ * (desk 0). The inheritance is live - desk 0's picture is looked up on
+ * every switch and never copied into the other desk's context, so the
+ * saved 'dwaN' stays empty and follows any later change to desk 0. */
+static bool dsk_inherit = FALSE;			/* the current desk is showing desk 0's */
+
 static void dsk_ctx_adopt(_WORD k)
 {
 	DSKCTX *c = &dsk_ctx[dsk_cur];
@@ -3553,16 +3559,33 @@ static void dsk_ctx_adopt(_WORD k)
 	c->pattern = options.dsk_pattern;
 	c->colour = options.dsk_colour;
 	c->wallm = options.wallm;
-	strcpy(c->wallp, options.wallp);
+	if (dsk_inherit && strcmp(options.wallp, dsk_ctx[0].wallp) == 0)
+		c->wallp[0] = 0;					/* still desk 0's, not its own */
+	else
+		strcpy(c->wallp, options.wallp);
 
 	c = &dsk_ctx[k];
 	desktop = c->tree;
 	desk_icons = c->icons;
 	options.dsk_pattern = c->pattern;
 	options.dsk_colour = c->colour;
-	options.wallm = c->wallm;
-	strcpy(options.wallp, c->wallp);
+	dsk_inherit = (k != 0 && c->wallp[0] == 0 && dsk_ctx[0].wallp[0] != 0);
+	if (dsk_inherit)
+	{
+		options.wallm = dsk_ctx[0].wallm;
+		strcpy(options.wallp, dsk_ctx[0].wallp);
+	} else
+	{
+		options.wallm = c->wallm;
+		strcpy(options.wallp, c->wallp);
+	}
 	dsk_cur = k;
+}
+
+/* the main desk's wallpaper path ("" = none), wherever we are */
+const char *dsk_wall_main(void)
+{
+	return (dsk_cur == 0) ? options.wallp : dsk_ctx[0].wallp;
 }
 
 
@@ -3586,6 +3609,33 @@ void dsk_wall_bind(const char *path, _WORD mode)
 
 	dsk_ctx[dsk_cur].wallm = options.wallm;
 	strcpy(dsk_ctx[dsk_cur].wallp, options.wallp);
+
+	/* "none" on another desk means "the main desk's" from now on */
+	dsk_inherit = (dsk_cur != 0 && options.wallp[0] == 0 && dsk_ctx[0].wallp[0] != 0);
+	if (dsk_inherit)
+	{
+		options.wallm = dsk_ctx[0].wallm;
+		strcpy(options.wallp, dsk_ctx[0].wallp);
+	}
+}
+
+/* The MAIN desk's wallpaper, set from wherever we are (the theme binds
+ * its picture here). Desks showing desk 0's follow at once. */
+void dsk_wall_bind_main(const char *path, _WORD mode)
+{
+	if (dsk_cur == 0)
+	{
+		dsk_wall_bind(path, mode);
+		return;
+	}
+	strsncpy(dsk_ctx[0].wallp, path ? path : "", sizeof(dsk_ctx[0].wallp));
+	dsk_ctx[0].wallm = mode ? 1 : 0;
+	if (dsk_inherit || (options.wallp[0] == 0 && dsk_ctx[0].wallp[0] != 0))
+	{
+		dsk_inherit = (dsk_ctx[0].wallp[0] != 0);
+		options.wallm = dsk_ctx[0].wallm;
+		strcpy(options.wallp, dsk_ctx[0].wallp);
+	}
 }
 
 void dsk_wall_set(const char *path, _WORD mode)
@@ -3617,7 +3667,10 @@ static VLNAME dsk_wsave_p;
 void dsk_wall_save_begin(void)
 {
 	dsk_ctx[dsk_cur].wallm = options.wallm;
-	strcpy(dsk_ctx[dsk_cur].wallp, options.wallp);
+	if (dsk_inherit && strcmp(options.wallp, dsk_ctx[0].wallp) == 0)
+		dsk_ctx[dsk_cur].wallp[0] = 0;		/* desk 0's, on loan: save "none" */
+	else
+		strcpy(dsk_ctx[dsk_cur].wallp, options.wallp);
 
 	dsk_wsave_m = options.wallm;
 	strcpy(dsk_wsave_p, options.wallp);
