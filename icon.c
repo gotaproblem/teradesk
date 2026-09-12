@@ -2633,6 +2633,16 @@ void set_dsk_background(_WORD pattern, _WORD colour)
 	if (bk_install())
 		return;
 
+	/* APJ-OS: a Fluent-class theme brings its own desktop colour, the
+	 * flat stand-in for its wallpaper. The saved pattern/colour are kept
+	 * untouched for the classic themes. */
+
+	if (bt_deskpen() >= 0)
+	{
+		colour = bt_deskpen();
+		pattern = 0;
+	}
+
 	if (desktop[0].ob_type == G_BOX)
 	{
 		if (colour > 0)
@@ -3238,6 +3248,9 @@ static void icn_labelboxes(void)
 
 void dsk_themechanged(void)
 {
+	/* the theme's desktop colour (or the saved one back again) */
+	set_dsk_background(options.dsk_pattern, options.dsk_colour);
+
 	icn_labelboxes();
 
 	if (options.igrid)
@@ -3555,13 +3568,18 @@ _WORD dsk_current(void)
  * An empty path removes the wallpaper (back to pattern/colour).
  */
 
-void dsk_wall_set(const char *path, _WORD mode)
+void dsk_wall_bind(const char *path, _WORD mode)
 {
 	strsncpy(options.wallp, path ? path : "", sizeof(options.wallp));
 	options.wallm = mode ? 1 : 0;
 
 	dsk_ctx[dsk_cur].wallm = options.wallm;
 	strcpy(dsk_ctx[dsk_cur].wallp, options.wallp);
+}
+
+void dsk_wall_set(const char *path, _WORD mode)
+{
+	dsk_wall_bind(path, mode);
 
 	bk_drop();
 	bk_init();

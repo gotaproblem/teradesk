@@ -52,7 +52,19 @@ typedef struct
 	_WORD radius;					/* corner rounding, px */
 	_WORD has_ext;					/* 1 = ext[] is filled in */
 	unsigned char ext[R_EXT_N][3];	/* border hover pressed focus disabled elevation accent */
+	/* APJ-OS: the desktop colour a Fluent-class preset brings with it -
+	 * the flat stand-in for its wallpaper (skins/wall/<FILE>.PNG in
+	 * apj-os-tools is the same picture as a gradient). Loaded into
+	 * BT_PEN_DESK; the classic presets leave the saved pattern/colour. */
+	unsigned char desk[3];
+	/* APJ-OS: the wallpaper that goes with it, BT_WALL_DIR<wall>.PNG,
+	 * applied when the desk has no wallpaper or one of ours; "" = none */
+	char wall[6];
 } PRESET;
+
+/* where the APJ-OS desktop backgrounds live (skins/mkwall.py output) */
+#define BT_WALL_DIR		"S:\\APJ-OS\\BG\\"
+
 
 /* If the reserved register block and the role count ever disagree,
  * bt_resolve() would write past the block - make that a compile error. */
@@ -71,7 +83,7 @@ static const PRESET presets[] =
 {
 	/* 0: GEM Grey - standard indices, no palette load */
 	{ "GEM Grey", 0,
-	  {{0,0,0}}, 6, 3, 8, 0 ,  0, 0, {{0,0,0}} },
+	  {{0,0,0}}, 6, 3, 8, 0 ,  0, 0, {{0,0,0}}, {0,0,0}, "" },
 
 	/* 1: Slate - dark grey, white text, cyan selection (the approved
 	 *    mockup: face/paper 555555, light C0C0C0, dark black, sel cyan
@@ -80,35 +92,35 @@ static const PRESET presets[] =
 	  { {0x55,0x55,0x55}, {0xFF,0xFF,0xFF}, {0xC0,0xC0,0xC0}, {0x00,0x00,0x00},
 	    {0x00,0xFF,0xFF}, {0x00,0x00,0x00}, {0xDC,0x26,0x26}, {0xFF,0xFF,0xFF},
 	    {0x55,0x55,0x55}, {0x00,0x00,0x00}, {0x00,0xFF,0xFF}, {0x55,0x55,0x55} },
-	  6, 3, 8, 0 ,  0, 0, {{0,0,0}} },
+	  6, 3, 8, 0 ,  0, 0, {{0,0,0}}, {0,0,0}, "" },
 
 	/* 2: Midnight - near-black, purple accent */
 	{ "Midnight", 1,
 	  { {0x27,0x27,0x2A}, {0xFA,0xFA,0xFA}, {0x3F,0x3F,0x46}, {0x09,0x09,0x0B},
 	    {0xA8,0x55,0xF7}, {0xFF,0xFF,0xFF}, {0xDC,0x26,0x26}, {0xFF,0xFF,0xFF},
 	    {0x18,0x18,0x1B}, {0x09,0x09,0x0B}, {0xFA,0xFA,0xFA}, {0x18,0x18,0x1B} },
-	  6, 3, 8, 0 ,  0, 0, {{0,0,0}} },
+	  6, 3, 8, 0 ,  0, 0, {{0,0,0}}, {0,0,0}, "" },
 
 	/* 3: Navy Gold - high-trust navy with gold selection */
 	{ "Navy Gold", 1,
 	  { {0x12,0x36,0x5A}, {0xF8,0xFA,0xFC}, {0x1E,0x4E,0x80}, {0x07,0x1A,0x2E},
 	    {0xC7,0xA8,0x4B}, {0x0A,0x25,0x40}, {0xB9,0x1C,0x1C}, {0xFF,0xFF,0xFF},
 	    {0x0A,0x25,0x40}, {0x0A,0x25,0x40}, {0xC7,0xA8,0x4B}, {0x0A,0x25,0x40} },
-	  6, 3, 8, 0 ,  0, 0, {{0,0,0}} },
+	  6, 3, 8, 0 ,  0, 0, {{0,0,0}}, {0,0,0}, "" },
 
 	/* 4: Paper - warm light, editorial */
 	{ "Paper", 1,
 	  { {0xFA,0xFA,0xF8}, {0x1C,0x19,0x17}, {0xFF,0xFF,0xFF}, {0xD6,0xD3,0xD1},
 	    {0x03,0x69,0xA1}, {0xFF,0xFF,0xFF}, {0xC2,0x41,0x0C}, {0xFF,0xFF,0xFF},
 	    {0xF5,0xF0,0xEB}, {0xE7,0xE0,0xD8}, {0x1C,0x19,0x17}, {0xFF,0xFF,0xFF} },
-	  6, 3, 8, 0 ,  0, 0, {{0,0,0}} },
+	  6, 3, 8, 0 ,  0, 0, {{0,0,0}}, {0,0,0}, "" },
 
 	/* 5: SaaS Light - clean blue-on-white */
 	{ "SaaS Light", 1,
 	  { {0xFF,0xFF,0xFF}, {0x0F,0x17,0x2A}, {0xFF,0xFF,0xFF}, {0xCB,0xD5,0xE1},
 	    {0x25,0x63,0xEB}, {0xFF,0xFF,0xFF}, {0xDC,0x26,0x26}, {0xFF,0xFF,0xFF},
 	    {0xF1,0xF5,0xF9}, {0xE2,0xE8,0xF0}, {0x0F,0x17,0x2A}, {0xFF,0xFF,0xFF} },
-	  6, 3, 8, 0 ,  0, 0, {{0,0,0}} },
+	  6, 3, 8, 0 ,  0, 0, {{0,0,0}}, {0,0,0}, "" },
 
 	/* 6: Atari Blue - the mockup classic: grey face, BLUE titles and
 	 *    selection, light interiors */
@@ -116,32 +128,90 @@ static const PRESET presets[] =
 	  { {0xC0,0xC0,0xC0}, {0x00,0x00,0x00}, {0xFF,0xFF,0xFF}, {0x55,0x55,0x55},
 	    {0x00,0x00,0x7F}, {0xFF,0xFF,0xFF}, {0xDC,0x26,0x26}, {0xFF,0xFF,0xFF},
 	    {0xC0,0xC0,0xC0}, {0x00,0x00,0xFF}, {0xFF,0xFF,0xFF}, {0xFF,0xFF,0xFF} },
-	  6, 3, 8, 0 ,  0, 0, {{0,0,0}} },
+	  6, 3, 8, 0 ,  0, 0, {{0,0,0}}, {0,0,0}, "" },
 
 	/* 7: Terminal - the mockup green-on-black, flat (no bevels) */
 	{ "Terminal", 1,
 	  { {0x00,0x00,0x00}, {0x00,0xFF,0x00}, {0x00,0xFF,0x00}, {0x00,0x7F,0x00},
 	    {0x00,0xFF,0x00}, {0x00,0x00,0x00}, {0xDC,0x26,0x26}, {0xFF,0xFF,0xFF},
 	    {0x00,0x00,0x00}, {0x00,0x00,0x00}, {0x00,0xFF,0x00}, {0x00,0x00,0x00} },
-	  6, 3, 8, 1 ,  0, 0, {{0,0,0}} },
+	  6, 3, 8, 1 ,  0, 0, {{0,0,0}}, {0,0,0}, "" },
 
-	/* 8: Fluent - APJ-OS direction C. Windows 11 light: Mica-grey
-	 *    panel F3F3F3, near-white control faces, a 1px E5E5E5 border in
-	 *    place of bevels, 0067C0 accent, 4px corners. The only preset
-	 *    that spells out the Fluent roles instead of deriving them. */
-	{ "Fluent", 1,
-	  { {0xFB,0xFB,0xFB}, {0x1B,0x1B,0x1B}, {0xFF,0xFF,0xFF}, {0xE5,0xE5,0xE5},
-	    {0x00,0x67,0xC0}, {0xFF,0xFF,0xFF}, {0xC4,0x2B,0x1C}, {0xFF,0xFF,0xFF},
-	    {0xF3,0xF3,0xF3}, {0xF3,0xF3,0xF3}, {0x1B,0x1B,0x1B}, {0xFF,0xFF,0xFF} },
+	/* 8-11: the APJ-OS Fluent family. Role for role the palettes of the
+	 *    APJSKIN sheets in apj-os-tools/skins/tokens/<skin>.json (FLTL, FLTD,
+	 *    GRPH, FUJI), so a skinned app's text drawn through XaAES's pens
+	 *    lands on the same colours its sheet was baked with, and
+	 *    apjskin picks the sheet whose palette is nearest this table.
+	 *    Flat, 1px borders in place of bevels, 4px corners. */
+
+	/* 8: Fluent Light - Windows 11 light: Mica-grey panel, white
+	 *    surfaces, 0F6CBD accent */
+	{ "Fluent Light", 1,
+	  { {0xFF,0xFF,0xFF}, {0x15,0x1B,0x22}, {0xFF,0xFF,0xFF}, {0xC3,0xCA,0xD3},
+	    {0xCF,0xE4,0xF7}, {0x0A,0x2A,0x45}, {0xF7,0xD9,0xD6}, {0x6D,0x21,0x1B},
+	    {0xF2,0xF4,0xF7}, {0xE8,0xEC,0xF1}, {0x19,0x21,0x2A}, {0xFF,0xFF,0xFF} },
 	  8, 4, 6, 1,
 	  4, 1,
-	  { {0xE5,0xE5,0xE5},	/* border    */
-	    {0xF6,0xF6,0xF6},	/* hover     */
-	    {0xF0,0xF0,0xF0},	/* pressed   */
-	    {0x1B,0x1B,0x1B},	/* focus     - Win11 draws a dark 2px ring */
-	    {0xA0,0xA0,0xA0},	/* disabled  */
-	    {0xD6,0xD6,0xD6},	/* elevation */
-	    {0x00,0x67,0xC0} } },	/* accent    */
+	  { {0xD7,0xDD,0xE5},	/* border    */
+	    {0xEA,0xEF,0xF5},	/* hover     */
+	    {0xDB,0xE4,0xEE},	/* pressed   */
+	    {0x0F,0x6C,0xBD},	/* focus     */
+	    {0x9A,0xA5,0xB1},	/* disabled  */
+	    {0xB6,0xBF,0xCA},	/* elevation */
+	    {0x0F,0x6C,0xBD} },	/* accent    */
+	  {0xBF,0xD0,0xE5},	/* desk: pale steel blue */
+	  "FLTL" },
+
+	/* 9: Fluent Dark - Windows 11 dark: charcoal-blue, 4CC2FF accent */
+	{ "Fluent Dark", 1,
+	  { {0x2B,0x32,0x3A}, {0xF0,0xF4,0xF8}, {0x3F,0x49,0x54}, {0x12,0x16,0x1B},
+	    {0x0F,0x3B,0x57}, {0xEA,0xF6,0xFF}, {0x7A,0x2F,0x2A}, {0xFF,0xEC,0xE9},
+	    {0x1F,0x24,0x2B}, {0x16,0x1B,0x21}, {0xE8,0xEE,0xF5}, {0x16,0x1B,0x21} },
+	  8, 4, 6, 1,
+	  4, 1,
+	  { {0x39,0x42,0x4D},	/* border    */
+	    {0x33,0x3B,0x45},	/* hover     */
+	    {0x10,0x20,0x2B},	/* pressed   */
+	    {0x4C,0xC2,0xFF},	/* focus     */
+	    {0x6C,0x7A,0x89},	/* disabled  */
+	    {0x0A,0x0D,0x11},	/* elevation */
+	    {0x4C,0xC2,0xFF} },	/* accent    */
+	  {0x0D,0x1E,0x2E},	/* desk: deep navy */
+	  "FLTD" },
+
+	/* 10: Graphite - neutral dark greys, silver accent */
+	{ "Graphite", 1,
+	  { {0x2D,0x32,0x36}, {0xE9,0xEB,0xED}, {0x43,0x4A,0x50}, {0x13,0x16,0x19},
+	    {0x34,0x3B,0x42}, {0xFF,0xFF,0xFF}, {0x6B,0x3B,0x38}, {0xFF,0xEC,0xEB},
+	    {0x20,0x23,0x26}, {0x17,0x19,0x1C}, {0xE3,0xE7,0xEA}, {0x17,0x19,0x1C} },
+	  8, 4, 6, 1,
+	  4, 1,
+	  { {0x3B,0x41,0x47},	/* border    */
+	    {0x36,0x3C,0x42},	/* hover     */
+	    {0x19,0x1C,0x1F},	/* pressed   */
+	    {0xCF,0xD8,0xE0},	/* focus     */
+	    {0x75,0x7D,0x84},	/* disabled  */
+	    {0x0B,0x0D,0x0E},	/* elevation */
+	    {0xCF,0xD8,0xE0} },	/* accent    */
+	  {0x19,0x1D,0x21},	/* desk: graphite */
+	  "GRPH" },
+
+	/* 11: Fuji - warm near-black, Atari-red accent */
+	{ "Fuji", 1,
+	  { {0x30,0x26,0x23}, {0xF5,0xEC,0xE9}, {0x47,0x39,0x35}, {0x14,0x0F,0x0E},
+	    {0x4D,0x1D,0x17}, {0xFF,0xE9,0xE4}, {0x7D,0x2A,0x22}, {0xFF,0xE9,0xE4},
+	    {0x22,0x1B,0x19}, {0x18,0x12,0x11}, {0xF2,0xE6,0xE2}, {0x18,0x12,0x11} },
+	  8, 4, 6, 1,
+	  4, 1,
+	  { {0x45,0x38,0x35},	/* border    */
+	    {0x3A,0x2E,0x2B},	/* hover     */
+	    {0x1C,0x14,0x13},	/* pressed   */
+	    {0xC8,0x38,0x2F},	/* focus     */
+	    {0x7C,0x6A,0x66},	/* disabled  */
+	    {0x0C,0x08,0x07},	/* elevation */
+	    {0xC8,0x38,0x2F} },	/* accent    */
+	  {0x2B,0x15,0x10},	/* desk: dark ember */
+	  "FUJI" },
 };
 
 #define NPRESETS	((_WORD) (sizeof(presets) / sizeof(presets[0])))
@@ -239,6 +309,35 @@ static const _WORD gempen[4] = { G_WHITE, G_BLACK, G_LWHITE, G_LBLACK };
 
 void dsk_workarea(void);				/* icon.c (icon.h needs half the desktop's headers) */
 void dsk_themechanged(void);			/* icon.c: label boxes and icon grid follow the theme */
+void dsk_wall_bind(const char *path, _WORD mode);	/* icon.c: current desk's wallpaper, no redraw */
+bool x_exist(const char *file, _WORD flags);		/* xfilesys.h, whose presets[] clashes with ours */
+#define BT_EX_FILE	1						/* = EX_FILE */
+
+/*
+ * APJ-OS: a Fluent preset brings its wallpaper. The current desk takes
+ * BT_WALL_DIR<wall>.PNG when it has no wallpaper, or one of ours from an
+ * earlier theme; a picture the user chose is never touched, and a
+ * missing file changes nothing (the preset's flat desk colour shows
+ * instead). The caller redraws - dsk_themechanged() reloads it.
+ */
+static void bt_wall(const PRESET *p)
+{
+	char path[sizeof(BT_WALL_DIR) + 12];
+	_WORD n = (_WORD) (sizeof(BT_WALL_DIR) - 1);
+
+	if (!p->wall[0])
+		return;
+	if (options.wallp[0] && strnicmp(options.wallp, BT_WALL_DIR, n) != 0)
+		return;
+
+	sprintf(path, "%s%s.PNG", BT_WALL_DIR, p->wall);
+	if (stricmp(path, options.wallp) == 0)
+		return;
+	if (!x_exist(path, BT_EX_FILE))
+		return;
+
+	dsk_wall_bind(path, 1);				/* 1 = fit */
+}
 
 static void bt_apjpush(const PRESET *p)
 {
@@ -268,7 +367,8 @@ static void bt_apjpush(const PRESET *p)
 	/* all roles in: reskin our open windows (chrome) and redraw */
 	appl_control(-1, 113, NULL);
 	dsk_workarea();					/* XaAES made the menu bar taller */
-	dsk_themechanged();				/* label boxes and icon cell for this theme */
+	bt_wall(p);						/* the preset's wallpaper, if we may */
+	dsk_themechanged();				/* label boxes, icon cell, desk colour/wallpaper */
 }
 
 static void bt_gempens(const PRESET *p)
@@ -350,6 +450,18 @@ static void bt_resolve(void)
 			vs_color(vdi_handle, BT_PAL_BASE + i, rgb);
 			idx[i] = BT_PAL_BASE + i;
 		}
+
+		/* APJ-OS: the preset's desktop colour, one register below the
+		 * role block (see bt_deskpen) */
+		if (p->has_ext)
+		{
+			_WORD rgb[3];
+
+			rgb[0] = (_WORD) ((long) p->desk[0] * 1000L / 255L);
+			rgb[1] = (_WORD) ((long) p->desk[1] * 1000L / 255L);
+			rgb[2] = (_WORD) ((long) p->desk[2] * 1000L / 255L);
+			vs_color(vdi_handle, BT_PEN_DESK, rgb);
+		}
 	} else
 	{
 		for (i = 0; i < BT_R_N; i++)
@@ -430,6 +542,14 @@ typedef struct
 _WORD bt_fluent(void)
 {
 	return (apj_render && presets[cur].has_ext && xd_ncolours >= 16) ? 1 : 0;
+}
+
+/* APJ-OS: the pen holding a Fluent-class preset's own desktop colour,
+ * or -1 when the saved pattern/colour apply (classic preset, mono, or
+ * a kernel without the renderer) */
+_WORD bt_deskpen(void)
+{
+	return bt_fluent() ? BT_PEN_DESK : -1;
 }
 
 

@@ -52,6 +52,7 @@ _WORD dsk_current(void);
 void dsk_sweep(void);					/* full-screen redraw broadcast */
 void icn_theme_labels(void);			/* re-stamp icon label colours (btheme) */
 void dsk_wall_set(const char *path, _WORD mode);	/* current desk's wallpaper */
+void dsk_wall_bind(const char *path, _WORD mode);	/* the same, stored only: caller redraws */
 void dsk_wall_save_begin(void);			/* config-save desk-0 wallpaper fixup */
 void dsk_wall_save_end(void);
 _WORD dsk_load(XFILE *file);

@@ -88,6 +88,7 @@ typedef struct
 
 #define BT_PAL_N	19
 #define BT_PAL_BASE	(256 - BT_PAL_N)	/* 237..255 */
+#define BT_PEN_DESK	(BT_PAL_BASE - 1)	/* 236: a Fluent preset's desktop colour */
 
 void          bt_use(_WORD id);			/* select the active theme (clamped) */
 _WORD         bt_current(void);			/* active theme index */
@@ -123,6 +124,7 @@ _WORD bt_apj_render(void);
 
 _WORD bt_text(_WORD x, _WORD y, const char *s);
 _WORD bt_fluent(void);				/* APJ-OS: Fluent-class preset under render_apj */
+_WORD bt_deskpen(void);				/* APJ-OS: BT_PEN_DESK under a Fluent preset, else -1 */
 
 enum
 {
