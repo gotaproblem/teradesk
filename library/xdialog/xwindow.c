@@ -1006,7 +1006,18 @@ _WORD xw_hndlmessage(_WORD *message)
 		/* APJ-OS: XaAES sends WM_SIZED to every window of a client whose
 		 * chrome it re-lays-out (theme commit/drop); windows without a
 		 * handler - the taskbar, its tooltip and panels - have NULL here,
-		 * and the call jumped to address 0 */
+		 * and the call jumped to address 0.
+		 *
+		 * Everything here draws from the cached work area, which is only
+		 * refreshed when this window's size is SET. A theme change moves
+		 * the work area without changing the window rect, so the cache
+		 * has to be refreshed from the AES right here, or every window
+		 * keeps drawing a few pixels off - the old info line left half a
+		 * text row above the new one. */
+		wind_get_grect(w->xw_handle, WF_CURRXYWH, &w->xw_size);
+		wind_get_grect(w->xw_handle, WF_WORKXYWH, &w->xw_work);
+		xw_set_barpos(w);
+
 		if (func->wd_sized)
 			func->wd_sized(w, (GRECT *) m4);
 		break;
