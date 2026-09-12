@@ -1104,11 +1104,14 @@ static void tb_drawdock(GRECT *clip)
 	 * desk, the current one filled */
 
 	{
-		_WORD d, cur = dsk_current(), sq = tb_ch * 14 / 20, gap = 4;
+		_WORD d, cur = dsk_current(), sq = tb_ch * 14 / 20, gap;
 		_WORD px = tb_badge.g_x + tb_badge.g_w + 16;
 
 		if (sq < 8)
 			sq = 8;
+		gap = sq * 2 / 3;				/* clear daylight between the squares */
+		if (gap < 6)
+			gap = 6;
 
 		for (d = 0; d < DSK_NDESKS; d++)
 		{
