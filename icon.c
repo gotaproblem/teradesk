@@ -391,6 +391,28 @@ static void icn_regrid_tree(OBJECT *tree, ICON *icn)
 		o->ob_y = icn->y * iconh + icn_yoff;
 		o->ob_width = iconw;
 		o->ob_height = iconh;
+
+		/* the desk icon carries its own copy of the block, made when it
+		 * was created - take the label geometry from the resource again
+		 * (it changes with the theme), keeping this icon's label text */
+
+		if (icn->icon_index >= 0 && icn->icon_index < n_icons)
+		{
+			OBJECT *r = &icons[icn->icon_index];
+			ICONBLK *sb = ((r->ob_type & 0xFF) == G_CICON) ?
+						  &r->ob_spec.ciconblk->monoblk : r->ob_spec.iconblk;
+			ICONBLK *db = ((o->ob_type & 0xFF) == G_CICON) ?
+						  &o->ob_spec.ciconblk->monoblk : o->ob_spec.iconblk;
+
+			db->ib_xicon = sb->ib_xicon;
+			db->ib_yicon = sb->ib_yicon;
+			db->ib_wicon = sb->ib_wicon;
+			db->ib_hicon = sb->ib_hicon;
+			db->ib_xtext = sb->ib_xtext;
+			db->ib_ytext = sb->ib_ytext;
+			db->ib_wtext = sb->ib_wtext;
+			db->ib_htext = sb->ib_htext;
+		}
 	}
 }
 
@@ -3046,6 +3068,16 @@ static _WORD aes_supports_coloricons(void)
  * the resource layout. Re-run after the configuration is loaded ('lchr').
  */
 
+/* the label geometry each icon has in the resource, for the classic themes */
+
+typedef struct
+{
+	_WORD wt, xt, yt, ht, ow, oh;
+} ICNBOX;
+
+static ICNBOX *icn_box0 = NULL;
+
+
 _WORD icn_labelchars(void)
 {
 	return (options.lchr >= 6 && options.lchr <= 12) ? options.lchr : 10;
@@ -3055,8 +3087,9 @@ _WORD icn_labelchars(void)
 static void icn_labelboxes(void)
 {
 	_WORD i, lw = icn_labelchars() * xd_fnt_w;
+	bool wide = (bt_fluent() != 0) && xd_fnt_h > 16;
 
-	if (xd_fnt_h <= 16 || icons == NULL)
+	if (icons == NULL || icn_box0 == NULL)
 		return;
 
 	for (i = 0; i < n_icons; i++)
@@ -3070,6 +3103,21 @@ static void icn_labelboxes(void)
 
 		b = &o->ob_spec.ciconblk->monoblk;
 
+		if (!wide)
+		{
+			/* a classic theme draws labels in the small font and fills
+			 * the label box - the wide box for the system font would be
+			 * a white bar wider than the icon's cell */
+			b->ib_wtext = icn_box0[i].wt;
+			b->ib_xtext = icn_box0[i].xt;
+			b->ib_ytext = icn_box0[i].yt;
+			b->ib_htext = icn_box0[i].ht;
+			b->ib_xicon = (icn_box0[i].ow - b->ib_wicon) / 2;
+			o->ob_width = icn_box0[i].ow;
+			o->ob_height = icn_box0[i].oh;
+			continue;
+		}
+
 		b->ib_wtext = (lw > b->ib_wicon) ? lw : b->ib_wicon;
 		b->ib_xtext = 0;
 		b->ib_xicon = (b->ib_wtext - b->ib_wicon) / 2;
@@ -3079,6 +3127,25 @@ static void icn_labelboxes(void)
 		o->ob_width = b->ib_wtext;
 		o->ob_height = b->ib_ytext + b->ib_htext;
 	}
+}
+
+
+/*
+ * APJ-OS: the UI theme changed - label boxes, icon cell and every desk's
+ * icon positions follow it, then the desktop and open windows redraw.
+ */
+
+void dsk_themechanged(void)
+{
+	icn_labelboxes();
+
+	if (options.igrid)
+		icn_autogrid(FALSE);
+
+	set_maxicons();
+	icn_regrid_all();
+	dsk_areachanged();
+	dir_refresh_all();
 }
 
 
@@ -3154,6 +3221,24 @@ bool load_icons(void)
 		{
 			n_icons++;
 		} while ((icons[i++].ob_flags & OF_LASTOB) == 0);
+
+		{
+			_WORD k;
+
+			icn_box0 = malloc_chk((size_t) n_icons * sizeof(ICNBOX));
+
+			for (k = 0; icn_box0 != NULL && k < n_icons; k++)
+			{
+				ICONBLK *b = &icons[k].ob_spec.ciconblk->monoblk;
+
+				icn_box0[k].wt = b->ib_wtext;
+				icn_box0[k].xt = b->ib_xtext;
+				icn_box0[k].yt = b->ib_ytext;
+				icn_box0[k].ht = b->ib_htext;
+				icn_box0[k].ow = icons[k].ob_width;
+				icn_box0[k].oh = icons[k].ob_height;
+			}
+		}
 
 		icn_labelboxes();
 		icn_autogrid(TRUE);

@@ -238,6 +238,7 @@ static const _WORD gempen[4] = { G_WHITE, G_BLACK, G_LWHITE, G_LBLACK };
  */
 
 void dsk_workarea(void);				/* icon.c (icon.h needs half the desktop's headers) */
+void dsk_themechanged(void);			/* icon.c: label boxes and icon grid follow the theme */
 
 static void bt_apjpush(const PRESET *p)
 {
@@ -250,6 +251,7 @@ static void bt_apjpush(const PRESET *p)
 	{
 		appl_control(-1, 112, NULL);
 		dsk_workarea();				/* menu bar back to stock height */
+		dsk_themechanged();			/* classic label boxes and icon cell */
 		return;
 	}
 
@@ -266,6 +268,7 @@ static void bt_apjpush(const PRESET *p)
 	/* all roles in: reskin our open windows (chrome) and redraw */
 	appl_control(-1, 113, NULL);
 	dsk_workarea();					/* XaAES made the menu bar taller */
+	dsk_themechanged();				/* label boxes and icon cell for this theme */
 }
 
 static void bt_gempens(const PRESET *p)

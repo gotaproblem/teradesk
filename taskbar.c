@@ -1373,6 +1373,20 @@ void tb_refit(void)
 	{
 		xw_setsize(tb_window, &tb_rect);
 		tb_dirty = TRUE;
+		tb_full = TRUE;
+	}
+
+	if (d < 0)
+	{
+		/* the bar got shorter: the strip it left is desktop now, and
+		 * still has the old bar's pixels on it */
+		GRECT s;
+
+		s.g_x = tb_rect.g_x;
+		s.g_y = tb_rect.g_y + d;
+		s.g_w = tb_rect.g_w;
+		s.g_h = -d;
+		redraw_desk(&s);
 	}
 }
 
