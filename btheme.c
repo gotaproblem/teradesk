@@ -336,7 +336,11 @@ static void bt_wall(const PRESET *p)
 	if (!x_exist(path, BT_EX_FILE))
 		return;
 
-	dsk_wall_bind(path, 1);				/* 1 = fit */
+	/* 0 = stretch. The desk area is the screen less the menu bar and the
+	 * taskbar, so it is not 16:9; "fit" keeps the picture's ratio and
+	 * letterboxes it with black bars down both sides. A gradient has no
+	 * ratio to keep - stretch it over the whole area. */
+	dsk_wall_bind(path, 0);
 }
 
 static void bt_apjpush(const PRESET *p)
