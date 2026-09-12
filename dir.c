@@ -2097,7 +2097,11 @@ OBJECT *make_tree(DIR_WINDOW *dw, _WORD sc,	/* first icon column to display */
 				/* APJ-OS: the selected icon shows its whole name, as the
 				 * Windows desktop does - the shortened "bigg...prg" is
 				 * for the ones you are not looking at */
-				if (selected)
+				/* by newstate, not the object state: on a selection change
+				 * dir_drawsel() builds the tree from the OLD state and
+				 * patches the object states afterwards - the label has to
+				 * be the one the icon is about to have */
+				if (h->newstate)
 					dir_iconlabel_sel(h->name, labels[i], sizeof(DLABEL));
 				else
 					dir_iconlabel(h->name, labels[i], sizeof(INAME));
