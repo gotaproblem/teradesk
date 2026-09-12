@@ -1100,7 +1100,50 @@ static void tb_drawdock(GRECT *clip)
 	}
   badge_done:;
 
-	/* right, from the edge inwards: two-line clock, pager, pills */
+	/* the desk pager, next to the PiSTorm button: one small square per
+	 * desk, the current one filled */
+
+	{
+		_WORD d, cur = dsk_current(), sq = tb_ch * 14 / 20, gap = 4;
+		_WORD px = tb_badge.g_x + tb_badge.g_w + 16;
+
+		if (sq < 8)
+			sq = 8;
+
+		for (d = 0; d < DSK_NDESKS; d++)
+		{
+			GRECT b;
+
+			b.g_x = px + d * (sq + gap);
+			b.g_y = cy - sq / 2;
+			b.g_w = sq;
+			b.g_h = sq;
+
+			if (d == cur)
+				tb_rfill(&b, t->accent);
+			else
+			{
+				GRECT in = b;
+
+				tb_rfill(&b, t->disabled);
+				in.g_x++;
+				in.g_y++;
+				in.g_w -= 2;
+				in.g_h -= 2;
+				tb_rfill(&in, t->panel);
+			}
+
+			/* a generous hit area: the square plus its gap */
+
+			tb_pager[d].g_x = b.g_x - gap / 2;
+			tb_pager[d].g_y = tb_rect.g_y + 4;
+			tb_pager[d].g_w = sq + gap;
+			tb_pager[d].g_h = tb_rect.g_h - 8;
+		}
+	}
+
+	/* right, from the edge inwards: the clock (when the AES is not
+	 * drawing it in the menu bar), then the pills */
 
 	x = tb_rect.g_x + tb_rect.g_w - 12;
 	tb_clockr.g_w = 0;
@@ -1156,51 +1199,7 @@ static void tb_drawdock(GRECT *clip)
 		x = r.g_x - 12;
 	}
 
-	/* the pager: one small square per desk, the current one filled */
-
-	{
-		_WORD d, cur = dsk_current(), sq = tb_ch * 14 / 20, gap = 4;
-
-		if (sq < 8)
-			sq = 8;
-
-		x -= DSK_NDESKS * sq + (DSK_NDESKS - 1) * gap;
-
-		for (d = 0; d < DSK_NDESKS; d++)
-		{
-			GRECT b;
-
-			b.g_x = x + d * (sq + gap);
-			b.g_y = cy - sq / 2;
-			b.g_w = sq;
-			b.g_h = sq;
-
-			if (d == cur)
-				tb_rfill(&b, t->accent);
-			else
-			{
-				GRECT in = b;
-
-				tb_rfill(&b, t->disabled);
-				in.g_x++;
-				in.g_y++;
-				in.g_w -= 2;
-				in.g_h -= 2;
-				tb_rfill(&in, t->panel);
-			}
-
-			/* a generous hit area: the square plus its gap */
-
-			tb_pager[d].g_x = b.g_x - gap / 2;
-			tb_pager[d].g_y = tb_rect.g_y + 4;
-			tb_pager[d].g_w = sq + gap;
-			tb_pager[d].g_h = tb_rect.g_h - 8;
-		}
-
-		x -= 12;
-	}
-
-	/* pills, laid out right to left so the group hugs the pager:
+	/* pills, laid out right to left from the clock, or the edge:
 	 * JIT (with a status dot), Temp, CPU/FPU, Pi model, APJ-OS version */
 
 	{
@@ -1275,9 +1274,10 @@ static void tb_drawdock(GRECT *clip)
 
 	{
 		_WORD gap = 6, total, shown = tb_napps, mid = tb_rect.g_x + tb_rect.g_w / 2;
-		_WORD room = mid - (tb_badge.g_x + tb_badge.g_w + 12);
+		_WORD leftx = tb_pager[DSK_NDESKS - 1].g_x + tb_pager[DSK_NDESKS - 1].g_w;
+		_WORD room = mid - (leftx + 12);
 
-		/* centred on the bar, never into the start button or the pills */
+		/* centred on the bar, never into the pager or the pills */
 
 		if (rightx - 12 - mid < room)
 			room = rightx - 12 - mid;
@@ -1287,7 +1287,7 @@ static void tb_drawdock(GRECT *clip)
 		total = shown * tile + (shown - 1) * gap;
 		x = mid - total / 2;
 
-		tb_midr.g_x = tb_badge.g_x + tb_badge.g_w;
+		tb_midr.g_x = leftx;
 		tb_midr.g_y = tb_rect.g_y;
 		tb_midr.g_w = rightx - tb_midr.g_x;
 		tb_midr.g_h = tb_rect.g_h;
