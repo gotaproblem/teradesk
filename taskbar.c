@@ -1456,6 +1456,17 @@ static void tb_drawpart(GRECT *clip)
 		return;
 	}
 
+	/* The dock is Fluent-only. Its tile rects have to be dropped here:
+	 * left over from the Fluent bar they sit across the middle of the
+	 * bar, exactly where the classic bar centres the desk pager, and
+	 * tb_button() tests the dock first - which is why pager buttons 2
+	 * and 3 stopped switching desks after a theme change while the
+	 * outer two, clear of the tiles, still worked.
+	 */
+
+	for (i = 0; i < TB_MAXAPPS; i++)
+		tb_appr[i].g_w = 0;
+
 	/* bar background with a raised top edge and a dark bottom edge */
 
 	in = tb_rect;

@@ -3165,12 +3165,22 @@ static void icn_labelboxes(void)
 			/* a classic theme draws labels in the small font and fills
 			 * the label box - the wide box for the system font would be
 			 * a white bar wider than the icon's cell */
-			b->ib_wtext = icn_box0[i].wt;
-			b->ib_xtext = icn_box0[i].xt;
+			_WORD cw = icn_labelchars() * scw;
+
+			if (cw < icn_box0[i].wt)
+				cw = icn_box0[i].wt;
+			if (cw < b->ib_wicon)
+				cw = b->ib_wicon;
+
+			/* the label box is the whole cell, so the white background
+			 * lines up with the icon above it whatever the small font
+			 * measures - the resource geometry assumed a 6x6 cell */
+			b->ib_wtext = cw;
+			b->ib_xtext = 0;
 			b->ib_ytext = icn_box0[i].yt;
 			b->ib_htext = (sch > icn_box0[i].ht) ? sch : icn_box0[i].ht;
-			b->ib_xicon = (icn_box0[i].ow - b->ib_wicon) / 2;
-			o->ob_width = icn_box0[i].ow;
+			b->ib_xicon = (cw - b->ib_wicon) / 2;
+			o->ob_width = cw;
 			o->ob_height = b->ib_ytext + b->ib_htext;
 
 			if (o->ob_height < icn_box0[i].oh)
