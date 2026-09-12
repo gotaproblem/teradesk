@@ -1722,6 +1722,23 @@ void dir_iconlabel(const char *name, char *t, size_t size)
 }
 
 
+/*
+ * APJ-OS: the label of a SELECTED icon - the whole name (its pill grows
+ * with it and may overlap the icons beside it, as on the Windows desktop),
+ * shortened only if it is longer than a label can sensibly get.
+ */
+
+void dir_iconlabel_sel(const char *name, char *t, size_t size)
+{
+	size_t n = DLABEL_SEL;				/* a very long name still keeps its ends */
+
+	if (n > size)
+		n = size;
+	cramped_name(name, t, n);			/* trims blanks; "start...end" if longer */
+	dir_dispcase(t);
+}
+
+
 void dir_line(DIR_WINDOW *dw, char *s, _WORD item)
 {
 	NDTA *h;							/* pointer to directory item data */
@@ -2017,7 +2034,7 @@ OBJECT *make_tree(DIR_WINDOW *dw, _WORD sc,	/* first icon column to display */
 	long i;								/* counter */
 	OBJECT *obj;						/* pointer to the root object */
 	NDTA *h;							/* pointer to directory items */
-	INAME *labels;						/* pointers to icons labels */
+	DLABEL *labels;						/* pointers to icons labels */
 	_WORD icon_no;
 	_WORD j;
 	_WORD ci;							/* column in which an icon is drawn */
@@ -2044,9 +2061,9 @@ OBJECT *make_tree(DIR_WINDOW *dw, _WORD sc,	/* first icon column to display */
 
 	lo = (n + 1) * sizeof(OBJECT) + n * sizeof(CICONBLK);
 
-	if ((obj = malloc_chk(lo + n * sizeof(INAME))) != NULL)
+	if ((obj = malloc_chk(lo + n * sizeof(DLABEL))) != NULL)
 	{
-		labels = (INAME *) ((char *) (obj) + lo);
+		labels = (DLABEL *) ((char *) (obj) + lo);
 		row = (_WORD) ((sl - dw->py) * iconh);
 
 		/* Set background object */
@@ -2077,7 +2094,13 @@ OBJECT *make_tree(DIR_WINDOW *dw, _WORD sc,	/* first icon column to display */
 				} else
 					selected = h->selected;
 #if _MINT_
-				dir_iconlabel(h->name, labels[i], sizeof(INAME));
+				/* APJ-OS: the selected icon shows its whole name, as the
+				 * Windows desktop does - the shortened "bigg...prg" is
+				 * for the ones you are not looking at */
+				if (selected)
+					dir_iconlabel_sel(h->name, labels[i], sizeof(DLABEL));
+				else
+					dir_iconlabel(h->name, labels[i], sizeof(INAME));
 #else
 				strcpy(labels[i], h->name);	/* shorter, and safe in single-TOS */
 				dir_dispcase(labels[i]);
@@ -3083,6 +3106,30 @@ static void dir_drawsel(DIR_WINDOW *w)
 				sm = FALSE;				/* this will make all icons in the tree */
 			else
 				all = FALSE;			/* this will draw icons one by one */
+		}
+
+		/* APJ-OS: a selected icon shows its whole name, so its label can
+		 * reach outside its own cell. When such an icon changes state,
+		 * repaint the visible icons as a whole - drawing just the ones
+		 * that changed would leave the wide pill's pixels behind. */
+
+		if (colour_icons)
+		{
+			_WORD k;
+
+			for (k = 0; k < ncre; k++)
+			{
+				b = pb[k + j0];
+
+				if (b->selected != b->newstate &&
+					strlen(b->name) > (size_t) icn_labelchars())
+				{
+					n = MSEL + 1;		/* take the repaint-everything path */
+					sm = FALSE;
+					all = TRUE;
+					break;
+				}
+			}
 		}
 
 		/* Create icon objects tree  */

@@ -120,6 +120,10 @@ void dir_briefline(char *tstr, XATTR *att);
 void dir_line(DIR_WINDOW *dw, char *s, _WORD item);
 void dir_dispcase(char *s);		/* "BALL.CFG" -> "Ball.cfg" for display (options.ncase) */
 void dir_iconlabel(const char *name, char *t, size_t size);	/* an icon label as shown */
+void dir_iconlabel_sel(const char *name, char *t, size_t size);	/* the whole name, for a selected icon */
+#define DLABEL_MAX 44			/* a selected icon shows its whole name (dir.c) */
+#define DLABEL_SEL 33			/* at most this many characters of it */
+typedef char DLABEL[DLABEL_MAX];
 void dir_disp_mode(WINDOW *w);
 void dir_mode(WINDOW *w);
 void dir_newdir( WINDOW *w );
