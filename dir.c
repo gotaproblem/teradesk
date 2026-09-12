@@ -1658,11 +1658,12 @@ void dir_briefline(char *tstr, XATTR *att)
  */
 
 /*
- * APJ-OS: how a name is SHOWN - capital first letter, the rest lower case
- * ("BALL.CFG", "STBox" -> "Ball.cfg", "Stbox"). Display only: the name on
- * disk, and everything that opens, copies or renames, is untouched (the
- * FAT, HOSTFS and RAM drives match names without regard to case anyway).
- * Off with 'ncas 0' in teradesk.inf.
+ * APJ-OS: how a name is SHOWN. 'ncas' in teradesk.inf: 2 (default) all
+ * lower case ("BALL.CFG", "STBox" -> "ball.cfg", "stbox"), 1 capital first
+ * letter then lower case ("Ball.cfg", "Stbox"), 0 the name as it is.
+ * Display only: the name on disk, and everything that opens, copies or
+ * renames, is untouched (the FAT, HOSTFS and RAM drives match names
+ * without regard to case anyway).
  */
 
 void dir_dispcase(char *s)
@@ -1676,13 +1677,13 @@ void dir_dispcase(char *s)
 	{
 		char c = *s;
 
-		if (first)
+		if (first && options.ncase == 1)
 		{
 			if (c >= 'a' && c <= 'z')
 				*s = (char) (c - 'a' + 'A');
-			first = FALSE;
 		} else if (c >= 'A' && c <= 'Z')
 			*s = (char) (c - 'A' + 'a');
+		first = FALSE;
 	}
 }
 

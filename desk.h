@@ -188,7 +188,7 @@ typedef struct
 	VLNAME psdir;				/* directory scanned for the PiSTorm menu */
 	VLNAME wallp;				/* wallpaper image path (PNG/JPG) */
 	VLNAME startp;				/* taskbar start button image (PNG/JPG), empty = squares */
-	_WORD ncase;				/* show names as "Name.ext" (display only): 1 on, 0 real case */
+	_WORD ncase;				/* names shown (display only): 2 lower case, 1 "Name.ext", 0 as they are */
 	_WORD lchr;					/* icon label width in characters (6..12, default 10) */
 	_WORD igrid;				/* icon grid: 1 fits the icons automatically, 0 = set by hand */
 } Options;

@@ -192,7 +192,7 @@ static CfgEntry const Options_table[] = {
 	CFG_S("wall", options.wallp),	/* wallpaper image (PNG/JPG) */
 	CFG_D("walm", options.wallm),	/* wallpaper mode: 0 stretch, 1 fit */
 	CFG_S("strt", options.startp),	/* taskbar start button image (PNG/JPG) */
-	CFG_D("ncas", options.ncase),	/* names shown as "Name.ext": 1 on, 0 off */
+	CFG_D("ncas", options.ncase),	/* names shown: 2 lower case, 1 "Name.ext", 0 off */
 	CFG_D("lchr", options.lchr),	/* icon label width, characters */
 	CFG_D("igrd", options.igrid),	/* icon grid: 1 automatic, 0 by hand */
 	CFG_D("thm", options.thm),		/* Bespoke UI theme index */
@@ -880,7 +880,7 @@ static void opt_default(void)
 	options.aarr = 1;
 	options.tbar = 1;					/* Bespoke Desktop: taskbar on */
 	options.wallm = 1;					/* Bespoke Desktop: wallpaper fits */
-	options.ncase = 1;					/* APJ-OS: names shown as "Name.ext" */
+	options.ncase = 2;					/* APJ-OS: names shown in lower case */
 	options.lchr = 10;					/* APJ-OS: icon labels 10 characters wide */
 	options.igrid = 1;					/* APJ-OS: icon grid fits the icons */
 
