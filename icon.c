@@ -2643,14 +2643,19 @@ void set_dsk_background(_WORD pattern, _WORD colour)
 		pattern = 0;
 	}
 
-	if (desktop[0].ob_type == G_BOX)
+	/* The root may come back from bk_drop() as the box xd_xuserdef()
+	 * saved, extended type and all - so test the type's low byte, or a
+	 * desk that once had a wallpaper never gets its colour again */
+
+	if ((desktop[0].ob_type & 0x00FF) == G_BOX)
 	{
 		if (colour > 0)
 		{
-			desktop[0].ob_type |= (XD_BCKBOX << 8);
+			desktop[0].ob_type = G_BOX | (XD_BCKBOX << 8);
 			xd_xuserdef(&desktop[0], &dxub, ub_bckbox);
 		} else
 		{
+			desktop[0].ob_type = G_BOX;
 			desktop[0].ob_spec.obspec.interiorcol = colour;
 			desktop[0].ob_spec.obspec.fillpattern = pattern;
 		}
@@ -2787,6 +2792,12 @@ void dsk_areachanged(void)
 			bk_drop();
 			bk_init();					/* regenerates the desktop itself */
 		}
+
+		/* APJ-OS: bk_drop() left a plain box with the spec it saved, so
+		 * when there is no wallpaper - or the one named could not be
+		 * loaded - put the pattern/colour, or the theme's desktop colour,
+		 * back on the root before it is drawn */
+		set_dsk_background(options.dsk_pattern, options.dsk_colour);
 
 		regen_desktop(desktop);
 	}
@@ -3583,6 +3594,7 @@ void dsk_wall_set(const char *path, _WORD mode)
 
 	bk_drop();
 	bk_init();
+	set_dsk_background(options.dsk_pattern, options.dsk_colour);	/* if that failed */
 	regen_desktop(desktop);
 	redraw_desk(&xd_desk);
 }
