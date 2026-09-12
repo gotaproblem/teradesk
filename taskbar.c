@@ -2358,6 +2358,31 @@ static bool tb_build(void)
 		}
 	}
 
+	/* APJ-OS: under a Fluent theme the clock lives in the menu bar, drawn
+	 * by XaAES from the string we format here (opcode 121; it repaints
+	 * only when the text changes). While the AES takes it, the taskbar
+	 * draws no clock of its own; an AES that answers 0 (no theme, older
+	 * kernel) leaves it here as before. */
+	if (bt_fluent())
+	{
+		char mb[24], *sp = strrchr(new_clock, ' ');
+
+		/* "Sat 12 Sep 22:20" -> "Sat 12 Sep  22:20": a double space
+		 * between the date and the time reads better in one line */
+		if (sp != NULL)
+		{
+			_WORD n = (_WORD) (sp - new_clock);
+
+			memcpy(mb, new_clock, n);
+			mb[n] = ' ';
+			strcpy(mb + n + 1, sp);
+		} else
+			strcpy(mb, new_clock);
+
+		if (appl_control(-1, 121, mb) != 0)
+			new_clock[0] = 0;
+	}
+
 	if (strcmp(new_clock, tb_clock) != 0)
 	{
 		strcpy(tb_clock, new_clock);
