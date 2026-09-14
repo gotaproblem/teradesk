@@ -261,6 +261,20 @@ void tb_psfx(long dir)
 
 
 /*
+ * Fire a no-argument PSCTRL action sub-op (restart = 12, shutdown = 13).
+ * Returns 0 when PSCTRL is absent (nothing happened); on success the
+ * emulator tears down and exits, so this does not return. The caller
+ * confirms with the user first - these end the session.
+ */
+long tb_psaction(long subop)
+{
+	if (tb_psid == 0)
+		return 0;
+	return tb_nf->call(tb_psid | subop, 0L);
+}
+
+
+/*
  * Read the APJ-OS distribution version from S:\APJOS.VER (a one-line
  * file the installer writes on the hostfs share), building the bar
  * cell text "APJ-OS v<version>". The distribution version is not any
@@ -1268,7 +1282,7 @@ static void tb_drawdock(GRECT *clip)
 				hov = (tb_hovtgt == TB_HOV_APJ);
 			}
 
-			tb_pill(&xx, txt[k], hov, (c == 2 && tb_throttled != 0 && tb_flash != 0), hit, (c == 4));
+			tb_pill(&xx, txt[k], hov, (c == 2 && tb_throttled != 0 && tb_flash != 0), hit, 0);
 		}
 		(void) nk;
 	}
@@ -1494,7 +1508,7 @@ static void tb_drawpart(GRECT *clip)
 			_WORD x0 = x;
 			bool alert = (i == 2 && tb_throttled != 0 && tb_flash != 0);
 
-			tb_drawcell(&x, tb_cell[i], (i == 0 || i == 4), alert, FALSE);
+			tb_drawcell(&x, tb_cell[i], (i == 0), alert, FALSE);
 
 			if (i == 0)
 			{
@@ -1681,14 +1695,6 @@ static void tb_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 		y >= tb_badge.g_y && y < tb_badge.g_y + tb_badge.g_h)
 	{
 		sm_toggle();
-		return;
-	}
-
-	if (tb_jitr.g_w > 0 &&
-		x >= tb_jitr.g_x && x < tb_jitr.g_x + tb_jitr.g_w &&
-		y >= tb_jitr.g_y && y < tb_jitr.g_y + tb_jitr.g_h)
-	{
-		mn_toggle(&tb_jitr);
 		return;
 	}
 
@@ -2746,10 +2752,6 @@ void tb_hover(_WORD x, _WORD y)
 		{
 			tgt = TB_HOV_APJ;
 			tb_hovrect = tb_apjr;
-		} else if (bt_fluent() && tb_inrect(&tb_jitr, x, y))
-		{
-			tgt = TB_HOV_JIT;
-			tb_hovrect = tb_jitr;
 		} else if (bt_fluent() && tb_apphit(x, y) >= 0)
 		{
 			tgt = TB_HOV_APP + tb_apphit(x, y);

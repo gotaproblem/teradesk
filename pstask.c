@@ -749,7 +749,7 @@ void mn_toggle(const GRECT *from)
 /* ---- the PiSTorm system-tasks menu -------------------------------------- */
 
 #define SM_KIND			(NAME | CLOSER | MOVER)
-#define SM_NITEMS		5
+#define SM_NITEMS		7
 #define SM_COLS			16
 
 typedef struct
@@ -766,7 +766,9 @@ static const char *const sm_items[SM_NITEMS] = {
 	"Recover GUI",
 	"Sweep screen",
 	"Set wallpaper",
-	"Settings ..."
+	"Settings ...",
+	"Restart ...",
+	"Shut down ..."
 };
 
 static void st_open(void);				/* the settings page, below */
@@ -945,6 +947,21 @@ static void sm_button(WINDOW *w, _WORD x, _WORD y, _WORD n, _WORD bstate, _WORD 
 		break;
 	case 4:
 		st_open();						/* the live settings page */
+		break;
+	case 5:
+		/* Restart: re-read the saved .cfg and cold-boot. Destructive,
+		 * so confirm; default button is Cancel. On confirm the emulator
+		 * exits 42 and the launcher relaunches it - the machine reboots
+		 * under us, so nothing after this runs. */
+		if (form_alert(2, "[3][Restart emulation?|Cold-boot with the"
+		                  "|saved settings.][Restart|Cancel]") == 1)
+			tb_psaction(PSCTRL_RESTART);
+		break;
+	case 6:
+		/* Shut down: stop the emulator, back to the Pi console. */
+		if (form_alert(2, "[3][Shut down PiSTorm?|Back to the Pi"
+		                  "|Linux console.][Shut down|Cancel]") == 1)
+			tb_psaction(PSCTRL_SHUTDOWN);
 		break;
 	default:
 		break;

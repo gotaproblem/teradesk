@@ -47,6 +47,9 @@ void tb_popup_metrics(_WORD *cw, _WORD *ch);	/* bar font cell metrics */
 void ws_startup_push(void);				/* re-apply saved XaAES settings */
 void st_close(void);					/* close the settings page */
 void tb_psfx(long dir);					/* desk-slide: 1 = old exits left */
+#define PSCTRL_RESTART	12L				/* re-read cfg, cold boot (exit 42) */
+#define PSCTRL_SHUTDOWN	13L				/* stop, back to console (exit 0)   */
+long tb_psaction(long subop);			/* fire restart/shutdown; 0 if absent */
 char *tb_apjtitle(void);				/* "APJ-OS v0.1.1" or NULL */
 
 /* Hover (mouse-rectangle) support; XDEVENT from xdialog.h */
