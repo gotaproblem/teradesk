@@ -2024,6 +2024,11 @@ void set_iselector(SLIDER *slider, bool draw, XDINFO *info)
 	h1->ob_width = ic->ob_width;
 	h1->ob_height = ic->ob_height;
 
+	/* The preview is a picture, not a choice: a click on it leaves it
+	 * OS_SELECTED, and under the Fluent renderer a selected icon wears a
+	 * selection pill behind its label - a blue bar in the box. */
+	h1->ob_state &= ~OS_SELECTED;
+
 	/*
 	 * In low resolutions, move the icon object up for a little bit,
 	 * otherwise it goes out of the background box (why?)
@@ -2107,6 +2112,7 @@ _WORD icn_dialog(SLIDER *sl_info, _WORD *icon_no, _WORD startobj, _WORD bckpatt,
 			again = TRUE;
 		} else if (button == ICONDATA)
 		{
+			addicon[ICONDATA].ob_state &= ~OS_SELECTED;
 			rdro = ICONBACK;
 			again = TRUE;
 		} else if (button == CHNICNOK && *dirname)
