@@ -157,6 +157,14 @@ typedef _WORD (*userkeys) (XDINFO *info, void *userdata, _WORD scancode);
 
 extern _WORD xd_aes4_0;
 extern _WORD xd_colaes;
+
+/* Pens xdialog draws its own (userdef) objects with. Stock GEM values by
+ * default; a themed desktop sets them so the objects it draws itself -
+ * scrolled edit fields, underlined titles, shortcut underlines, the
+ * text cursor - read on the theme's panel like the AES-drawn ones. */
+extern _WORD xd_text_col;				/* text                         */
+extern _WORD xd_und_col;				/* shortcut-key underline       */
+extern _WORD xd_title_col;				/* XD_TITLE text                */
 extern _WORD aes_hor3d;
 extern _WORD aes_ver3d;
 extern _WORD xd_rbdclick;

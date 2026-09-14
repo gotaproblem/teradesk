@@ -419,6 +419,38 @@ static void bt_gempens(const PRESET *p)
  * and mono use the standard-16 fallback.
  */
 
+/*
+ * The pens xdialog draws its OWN objects with. The AES draws most of a
+ * dialog and the Fluent renderer themes that; but scrolled edit fields
+ * (XD_SCRLEDIT), underlined titles (XD_TITLE), shortcut underlines and
+ * the text cursor are painted by xddraw.c itself, in stock black, red
+ * and blue on a light-grey ground - which on Fluent Dark was black text
+ * on grey bars in "Open Item" and "Compare Files", and a blue About
+ * title on a dark panel. Under a Fluent preset they take the theme's
+ * text / accent / panel pens; otherwise the stock values go back.
+ */
+static void bt_xdpens(void)
+{
+	static _WORD stock_bg = -1;
+
+	if (stock_bg < 0)
+		stock_bg = xd_bg_col;		/* what xd_init() resolved */
+
+	if (bt_fluent())
+	{
+		xd_text_col = active.text;
+		xd_und_col = active.accent;
+		xd_title_col = active.accent;
+		xd_bg_col = active.panel;
+	} else
+	{
+		xd_text_col = G_BLACK;
+		xd_und_col = G_RED;
+		xd_title_col = G_LBLUE;
+		xd_bg_col = stock_bg;
+	}
+}
+
 static void bt_resolve(void)
 {
 	const PRESET *p = &presets[cur];
@@ -518,6 +550,7 @@ static void bt_resolve(void)
 
 	bt_gempens(p);
 	bt_apjpush(p);
+	bt_xdpens();
 }
 
 

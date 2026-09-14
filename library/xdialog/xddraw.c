@@ -47,6 +47,10 @@ static MFDB cursor_mfdb = { NULL, 1, 0, 1, 0, 0, 0, 0, 0 };
  * Get appropriate colour for activator/indicator/background object
  */
 
+_WORD xd_text_col = G_BLACK;			/* see xdialog.h */
+_WORD xd_und_col = G_RED;
+_WORD xd_title_col = G_LBLUE;
+
 static _WORD xd_get_3d_colour(_WORD flags)
 {
 	_WORD colour;
@@ -143,9 +147,9 @@ static void prt_text(const char *s, _WORD x, _WORD y, _WORD state)
 		*p = 0;
 		udef_vqt_extent(xd_vhandle, tmp, xtnd);
 		udef_vst_effects(xd_vhandle, attrib ^ 8);	/* XOR due to text-style extensions! */
-		udef_vst_color(xd_vhandle, G_RED);
+		udef_vst_color(xd_vhandle, xd_und_col);
 		udef_v_gtext(xd_vhandle, x + (xtnd[2] - xtnd[0]), y, " ");
-		udef_vst_color(xd_vhandle, G_BLACK);
+		udef_vst_color(xd_vhandle, xd_text_col);
 	}
 }
 
@@ -227,7 +231,7 @@ static void set_textdef(void)
 	udef_vst_rotation(xd_vhandle, 0);
 	udef_vst_alignment(xd_vhandle, 0, 5, &dummy, &dummy);
 	xd_vst_point(xd_regular_font.size, &dummy);
-	udef_vst_color(xd_vhandle, G_BLACK);
+	udef_vst_color(xd_vhandle, xd_text_col);
 	xd_vswr_trans_mode();
 }
 
@@ -893,7 +897,7 @@ static _WORD _CDECL ub_rectbut(PARMBLK *pb)
 		*pxyp++ = pxy[0];
 		*pxyp = pxy[3];
 
-		set_linedef(G_BLACK);
+		set_linedef(xd_text_col);
 		udef_v_pline(xd_vhandle, 2, pxy);
 		udef_v_pline(xd_vhandle, 2, &pxy[4]);
 	}
@@ -1202,16 +1206,16 @@ static _WORD _CDECL ub_title(PARMBLK *pb)
 		pxy[2] = pxy[0] + pb->pb_w - 1;
 
 		xd_vswr_repl_mode();
-		set_linedef(G_BLACK);
+		set_linedef(xd_text_col);
 		udef_v_pline(xd_vhandle, 2, pxy);
 	}
 
-	/* Draw title text in blue, then turn back to black */
+	/* Draw title text in the title pen (blue on stock GEM), then turn back */
 
 	set_textdef();
-	udef_vst_color(xd_vhandle, G_LBLUE);
+	udef_vst_color(xd_vhandle, xd_title_col);
 	prt_text(string, pb->pb_x + dx, pb->pb_y + (pb->pb_h - xd_regular_font.ch - 1) / 2, pb->pb_currstate);
-	udef_vst_color(xd_vhandle, G_BLACK);
+	udef_vst_color(xd_vhandle, xd_text_col);
 
 	/* Turn clipping off */
 
@@ -1314,7 +1318,7 @@ static void xd_credraw(XDINFO *info, GRECT *area)
 
 			xd_clip_on(&r);
 			xd_vswr_repl_mode();
-			set_linedef(G_BLACK);
+			set_linedef(xd_text_col);
 
 			pxy[0] = pxy[2] = cursor.g_x;
 			pxy[1] = cursor.g_y;
