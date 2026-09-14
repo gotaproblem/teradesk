@@ -2063,6 +2063,18 @@ _WORD icn_dialog(SLIDER *sl_info, _WORD *icon_no, _WORD startobj, _WORD bckpatt,
 	xub->uv.fill.colour = bckcol;
 	xub->uv.fill.pattern = bckpatt;
 
+	/* Under a Fluent preset the desk and the windows are the theme's flat
+	 * colours, not the saved pattern/colour pair - the preview box shows
+	 * the icon on the ground it will really sit on */
+	if (bt_fluent())
+	{
+		if (bckcol == options.dsk_colour && bckpatt == options.dsk_pattern)
+			xub->uv.fill.colour = bt_deskpen();
+		else
+			xub->uv.fill.colour = bt()->paper;
+		xub->uv.fill.pattern = 0;			/* solid */
+	}
+
 	/* Initialize slider */
 
 	icn_sl_init(*icon_no, sl_info);
