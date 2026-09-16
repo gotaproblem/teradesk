@@ -111,6 +111,8 @@ void tb_dbg(const char *s) { tipdbg(s); }
 #define PS_HOST_THROTTLED	70L
 #define PS_PI_MODEL			74L
 #define PS_PI_RAM_MB		75L
+#define PS_HOST_NET			78L		/* bit0 up, bit1 Wi-Fi, bits 8-15 quality */
+#define PS_HOST_INPUT		80L		/* bit1 USB keyboard, bit2 USB mouse */
 
 #define DEGREE_CH			'\370'		/* 0xF8: degree sign in the Atari charset */
 
@@ -2390,6 +2392,25 @@ static bool tb_build(void)
 
 		if (appl_control(-1, 121, mb) != 0)
 			new_clock[0] = 0;
+
+		/* and the status icons left of it (opcode 122): the network
+		 * and the USB input bridge, from the same host sampler. The
+		 * AES repaints only when what shows changes; an older AES
+		 * ignores the opcode. */
+		if (tb_psid != 0)
+		{
+			struct apj_menustatus
+			{
+				long net;
+				long input;
+			} st;
+
+			st.net = tb_ps(PS_HOST_NET);
+			st.input = tb_ps(PS_HOST_INPUT);
+			if (st.net < 0) st.net = 0;			/* old emulator: no icons */
+			if (st.input < 0) st.input = 0;
+			appl_control(-1, 122, &st);
+		}
 	}
 
 	if (strcmp(new_clock, tb_clock) != 0)
